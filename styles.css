@@ -1,0 +1,608 @@
+/* GitHub Octokit Plugin Styles */
+
+/* ========================================
+   Diff View Styles
+   ======================================== */
+
+.github-octokit-diff-view {
+    padding: 16px;
+    height: 100%;
+    overflow: auto;
+}
+
+.diff-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.diff-header h3 {
+    margin: 0;
+    flex: 1;
+}
+
+.diff-summary {
+    font-family: var(--font-monospace);
+    font-size: 0.9em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--background-secondary);
+}
+
+.diff-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.diff-toolbar button {
+    padding: 6px 12px;
+}
+
+.diff-counter {
+    margin-left: auto;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+/* Side-by-side view */
+.diff-content.side-by-side {
+    display: flex;
+    gap: 8px;
+}
+
+.diff-pane {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.pane-header {
+    padding: 8px 12px;
+    background: var(--background-secondary);
+    font-weight: 600;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.pane-content {
+    overflow: auto;
+    max-height: 60vh;
+}
+
+/* Inline view */
+.diff-content.inline {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    overflow: auto;
+    max-height: 60vh;
+}
+
+/* Hunk styles */
+.diff-hunk {
+    margin-bottom: 8px;
+}
+
+.hunk-header {
+    padding: 4px 12px;
+    background: var(--background-secondary-alt);
+    font-family: var(--font-monospace);
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+/* Line styles */
+.diff-line {
+    display: flex;
+    font-family: var(--font-monospace);
+    font-size: 0.85em;
+    line-height: 1.5;
+    white-space: pre;
+    min-height: 1.5em;
+}
+
+.line-number,
+.line-number-old,
+.line-number-new {
+    width: 40px;
+    padding: 0 8px;
+    text-align: right;
+    color: var(--text-muted);
+    background: var(--background-secondary);
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.line-prefix {
+    width: 20px;
+    padding: 0 4px;
+    text-align: center;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.line-content {
+    flex: 1;
+    padding: 0 8px;
+    overflow-x: auto;
+}
+
+/* Line type colors */
+.line-added {
+    background: rgba(46, 160, 67, 0.15);
+}
+
+.line-added .line-prefix,
+.line-added .line-number,
+.line-added .line-number-new {
+    color: rgb(46, 160, 67);
+}
+
+.line-removed {
+    background: rgba(248, 81, 73, 0.15);
+}
+
+.line-removed .line-prefix,
+.line-removed .line-number,
+.line-removed .line-number-old {
+    color: rgb(248, 81, 73);
+}
+
+.line-empty {
+    background: var(--background-secondary);
+}
+
+.line-context {
+    background: var(--background-primary);
+}
+
+/* Action buttons */
+.diff-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+/* ========================================
+   Sync View Styles
+   ======================================== */
+
+.github-octokit-sync-view {
+    padding: 12px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.sync-loading,
+.sync-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 24px;
+}
+
+.sync-message,
+.sync-error {
+    text-align: center;
+    padding: 24px;
+}
+
+.sync-error h3 {
+    color: var(--text-error);
+}
+
+/* Header */
+.sync-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sync-title {
+    flex: 1;
+}
+
+.sync-title h3 {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.sync-repo {
+    display: block;
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+.sync-refresh-btn {
+    padding: 4px 8px;
+    font-size: 1.2em;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.sync-stats {
+    display: flex;
+    gap: 8px;
+    font-size: 0.85em;
+}
+
+.stat-added { color: rgb(46, 160, 67); }
+.stat-modified { color: rgb(210, 153, 34); }
+.stat-deleted { color: rgb(248, 81, 73); }
+.stat-renamed { color: rgb(163, 113, 247); }
+.stat-conflict { color: rgb(248, 81, 73); font-weight: bold; }
+.stat-uptodate { color: var(--text-muted); }
+
+/* File list */
+.sync-file-list {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 12px;
+}
+
+.file-group {
+    margin-bottom: 12px;
+}
+
+.file-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.file-group-conflict .file-group-header { color: rgb(248, 81, 73); }
+.file-group-added .file-group-header { color: rgb(46, 160, 67); }
+.file-group-modified .file-group-header { color: rgb(210, 153, 34); }
+.file-group-deleted .file-group-header { color: rgb(248, 81, 73); }
+.file-group-renamed .file-group-header { color: rgb(163, 113, 247); }
+
+.file-group-files {
+    padding-left: 8px;
+}
+
+.sync-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.85em;
+}
+
+.sync-file input[type="checkbox"] {
+    margin: 0;
+}
+
+.file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.file-action {
+    padding: 2px 6px;
+    font-size: 0.8em;
+}
+
+/* Actions bar */
+.sync-actions-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.stage-controls,
+.sync-controls {
+    display: flex;
+    gap: 4px;
+}
+
+.staged-count {
+    margin-left: auto;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+/* Commit history */
+.commit-history {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.history-header h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.95em;
+}
+
+.history-empty,
+.history-error {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.commit-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.commit-item {
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: var(--background-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.commit-item:hover {
+    background: var(--background-secondary-alt);
+}
+
+.commit-message {
+    font-size: 0.85em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.commit-meta {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* ============================================
+   Log Viewer Styles
+   ============================================ */
+
+.github-octokit-log-viewer {
+    max-width: 800px;
+}
+
+.log-viewer-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.log-viewer-controls select {
+    padding: 4px 8px;
+}
+
+.log-entries {
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: var(--font-monospace);
+    font-size: 12px;
+    background: var(--background-secondary);
+    border-radius: 4px;
+    padding: 8px;
+}
+
+.log-entry {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-time {
+    color: var(--text-muted);
+}
+
+.log-level {
+    font-weight: bold;
+    min-width: 60px;
+}
+
+.log-category {
+    color: var(--text-accent);
+}
+
+.log-message {
+    flex: 1;
+}
+
+.log-data {
+    width: 100%;
+    margin: 4px 0 0 0;
+    padding: 4px;
+    background: var(--background-primary);
+    border-radius: 2px;
+    font-size: 11px;
+    overflow-x: auto;
+}
+
+.log-debug .log-level { color: var(--text-muted); }
+.log-info .log-level { color: var(--text-accent); }
+.log-warn .log-level { color: var(--color-yellow); }
+.log-error .log-level { color: var(--color-red); }
+
+.log-empty,
+.logs-empty {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 20px;
+}
+
+/* ============================================
+   Sync Panel Logs Section
+   ============================================ */
+
+.sync-logs-section {
+    margin-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+    padding-top: 16px;
+}
+
+.logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.logs-header h4 {
+    margin: 0;
+}
+
+.logs-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.logs-controls select,
+.logs-controls button {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.sync-logs-container {
+    max-height: 250px;
+    overflow-y: auto;
+    font-family: var(--font-monospace);
+    font-size: 11px;
+    background: var(--background-secondary);
+    border-radius: 4px;
+    padding: 8px;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+}
+
+.sync-logs-container .log-entry {
+    padding: 3px 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.sync-logs-container .log-entry:last-child {
+    border-bottom: none;
+}
+
+.sync-logs-container .log-time,
+.sync-logs-container .log-level,
+.sync-logs-container .log-category,
+.sync-logs-container .log-message,
+.sync-logs-container .log-data {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* Make log viewer modal text selectable too */
+.github-octokit-log-viewer .log-entries {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+}
+
+.github-octokit-log-viewer .log-entry {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.github-octokit-log-viewer .log-time,
+.github-octokit-log-viewer .log-level,
+.github-octokit-log-viewer .log-category,
+.github-octokit-log-viewer .log-message,
+.github-octokit-log-viewer .log-data {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* ============================================
+   Foldable Sections
+   ============================================ */
+
+.foldable-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.foldable-header:hover {
+    background: var(--background-modifier-hover);
+    border-radius: 4px;
+}
+
+.fold-chevron {
+    font-size: 10px;
+    transition: transform 0.15s ease;
+    color: var(--text-muted);
+}
+
+.fold-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+/* ============================================
+   Logs Section (Foldable)
+   ============================================ */
+
+.sync-logs-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.sync-logs-section .logs-header {
+    justify-content: flex-start;
+}
+
+.sync-logs-section .logs-header h4 {
+    flex: 1;
+    margin: 0;
+}
+
+.sync-logs-section .logs-controls {
+    margin-left: auto;
+}
+
+.logs-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.logs-filter select {
+    padding: 2px 6px;
+    font-size: 12px;
+}
