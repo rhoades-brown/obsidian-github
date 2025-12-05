@@ -1,14 +1,16 @@
 import { App, TFile, Vault } from 'obsidian';
 import { GitHubService, GitHubTreeEntry, BatchFileChange } from './githubService';
-import { 
-    hashContent, 
-    isBinaryFile, 
-    encodeBase64, 
+import {
+    hashContent,
+    isBinaryFile,
+    encodeBase64,
     encodeBase64Binary,
     decodeBase64,
     decodeBase64Binary,
     matchesIgnorePattern,
-    normalizePath 
+    normalizePath,
+    computeGitBlobSha,
+    computeGitBlobShaBinary
 } from '../utils/fileUtils';
 
 // ============================================================================
@@ -33,6 +35,7 @@ export interface FileSyncState {
 export interface LocalFileEntry {
     path: string;
     hash: string;
+    gitSha: string;  // Git blob SHA for comparison with GitHub
     modified: number;
     size: number;
     isBinary: boolean;
@@ -130,18 +133,22 @@ export class SyncService {
 
             const isBin = isBinaryFile(file.path);
             let hash: string;
+            let gitSha: string;
 
             if (isBin) {
                 const content = await this.vault.readBinary(file);
                 hash = hashContent(Array.from(new Uint8Array(content)).join(','));
+                gitSha = await computeGitBlobShaBinary(content);
             } else {
                 const content = await this.vault.read(file);
                 hash = hashContent(content);
+                gitSha = await computeGitBlobSha(content);
             }
 
             index.set(file.path, {
                 path: file.path,
                 hash,
+                gitSha,
                 modified: file.stat.mtime,
                 size: file.stat.size,
                 isBinary: isBin,
@@ -194,15 +201,19 @@ export class SyncService {
 
         try {
             const tree = await this.githubService.getTree(owner, repo, branch);
+            console.log(`[Sync] buildRemoteIndex: got ${tree.length} entries from GitHub tree`);
 
             for (const entry of tree) {
                 // Only include blobs (files), not trees (directories)
                 if (entry.type !== 'blob') continue;
 
                 // Apply subfolder filter if configured
+                // Note: '/' or empty string means root (no filtering)
                 let localPath = entry.path;
-                if (this.subfolderPath) {
+                const hasSubfolder = this.subfolderPath && this.subfolderPath !== '/' && this.subfolderPath !== '';
+                if (hasSubfolder) {
                     if (!entry.path.startsWith(this.subfolderPath + '/')) {
+                        console.log(`[Sync] Skipping ${entry.path}: not in subfolder '${this.subfolderPath}'`);
                         continue; // Skip files outside our subfolder
                     }
                     localPath = this.toLocalPath(entry.path);
@@ -210,17 +221,20 @@ export class SyncService {
 
                 // Skip ignored files
                 if (this.shouldIgnore(localPath)) {
+                    console.log(`[Sync] Skipping ${localPath}: matches ignore pattern`);
                     continue;
                 }
 
+                console.log(`[Sync] Including: ${entry.path} -> ${localPath}`);
                 index.set(localPath, {
                     path: entry.path,
                     sha: entry.sha,
                     size: entry.size,
                 });
             }
+            console.log(`[Sync] buildRemoteIndex: indexed ${index.size} files (after filtering)`);
         } catch (error) {
-            console.error('Failed to build remote index:', error);
+            console.error('[Sync] Failed to build remote index:', error);
             throw error;
         }
 
@@ -242,6 +256,11 @@ export class SyncService {
         const results: FileSyncState[] = [];
         const allPaths = new Set([...localIndex.keys(), ...remoteIndex.keys()]);
 
+        console.log(`[Sync] compareIndexes: localFiles=${localIndex.size}, remoteFiles=${remoteIndex.size}, hasLastSyncState=${!!lastSyncState}`);
+        if (lastSyncState) {
+            console.log(`[Sync] lastSyncState: fileHashes=${Object.keys(lastSyncState.fileHashes || {}).length}, fileShas=${Object.keys(lastSyncState.fileShas || {}).length}`);
+        }
+
         for (const path of allPaths) {
             const local = localIndex.get(path);
             const remote = remoteIndex.get(path);
@@ -252,20 +271,38 @@ export class SyncService {
 
             if (local && remote) {
                 // File exists both locally and remotely
-                const localChanged = lastHash ? local.hash !== lastHash : true;
-                const remoteChanged = lastSha ? remote.sha !== lastSha : true;
-
-                if (localChanged && remoteChanged) {
-                    status = 'conflict';
-                } else if (localChanged) {
-                    status = 'modified'; // Local is newer
-                } else if (remoteChanged) {
-                    status = 'modified'; // Remote is newer (will be handled by direction)
-                } else {
+                // Compare git blob SHAs directly - if they match, content is identical
+                if (local.gitSha === remote.sha) {
                     status = 'unchanged';
+                    console.log(`[Sync] ${path}: UNCHANGED (SHA match)`);
+                } else {
+                    // Content differs - check if it's a conflict or one-sided change
+                    const localChanged = lastHash ? local.hash !== lastHash : true;
+                    const remoteChanged = lastSha ? remote.sha !== lastSha : true;
+
+                    // Debug: log SHA mismatch
+                    console.log(`[Sync] ${path}: SHA mismatch`, {
+                        localGitSha: local.gitSha,
+                        remoteSha: remote.sha,
+                        lastHash,
+                        lastSha,
+                        localChanged,
+                        remoteChanged
+                    });
+
+                    if (localChanged && remoteChanged) {
+                        status = 'conflict';
+                    } else if (localChanged) {
+                        status = 'modified'; // Local is newer
+                    } else if (remoteChanged) {
+                        status = 'modified'; // Remote is newer (will be handled by direction)
+                    } else {
+                        status = 'unchanged';
+                    }
                 }
             } else if (local && !remote) {
                 // File only exists locally
+                console.log(`[Sync] ${path}: LOCAL ONLY (lastSha=${lastSha})`);
                 if (lastSha) {
                     status = 'deleted'; // Was on remote, now deleted there
                 } else {
@@ -273,6 +310,7 @@ export class SyncService {
                 }
             } else if (!local && remote) {
                 // File only exists remotely
+                console.log(`[Sync] ${path}: REMOTE ONLY (lastHash=${lastHash})`);
                 if (lastHash) {
                     status = 'deleted'; // Was local, now deleted locally
                 } else {
@@ -280,6 +318,11 @@ export class SyncService {
                 }
             } else {
                 continue; // Shouldn't happen
+            }
+
+            // Skip unchanged files
+            if (status === 'unchanged') {
+                continue;
             }
 
             results.push({
@@ -301,6 +344,30 @@ export class SyncService {
     // ========================================================================
 
     /**
+     * Ensure all parent folders exist for a file path
+     */
+    private async ensureParentFolders(filePath: string): Promise<void> {
+        const parts = filePath.split('/');
+        parts.pop(); // Remove filename
+
+        let currentPath = '';
+        for (const part of parts) {
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            const folder = this.vault.getAbstractFileByPath(currentPath);
+            if (!folder) {
+                try {
+                    await this.vault.createFolder(currentPath);
+                } catch (error) {
+                    // Folder might have been created by another operation
+                    if (!(error instanceof Error && error.message.includes('already exists'))) {
+                        throw error;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Pull a single file from GitHub to local vault
      */
     async pullFile(
@@ -310,10 +377,13 @@ export class SyncService {
         localPath: string
     ): Promise<FileSyncResult> {
         try {
+            console.log(`[Sync] Pulling file: ${remotePath} -> ${localPath}`);
             const content = await this.githubService.getFileContent(owner, repo, remotePath);
             const isBin = isBinaryFile(localPath);
 
             if (isBin) {
+                // Need to ensure parent folders exist for binary files too
+                await this.ensureParentFolders(localPath);
                 const binaryData = decodeBase64Binary(content.content);
                 await this.vault.adapter.writeBinary(localPath, binaryData);
             } else {
@@ -322,12 +392,23 @@ export class SyncService {
                 if (existingFile instanceof TFile) {
                     await this.vault.modify(existingFile, textContent);
                 } else {
-                    await this.vault.create(localPath, textContent);
+                    // Check if file exists at adapter level (e.g., .obsidian files)
+                    const fileExists = await this.vault.adapter.exists(localPath);
+                    if (fileExists) {
+                        // Use adapter to write directly
+                        await this.vault.adapter.write(localPath, textContent);
+                    } else {
+                        // Need to create parent folders if they don't exist
+                        await this.ensureParentFolders(localPath);
+                        await this.vault.create(localPath, textContent);
+                    }
                 }
             }
 
+            console.log(`[Sync] Successfully pulled: ${localPath}`);
             return { path: localPath, action: 'pulled', success: true };
         } catch (error) {
+            console.error(`[Sync] Failed to pull ${localPath}:`, error);
             return {
                 path: localPath,
                 action: 'pulled',
@@ -524,30 +605,39 @@ export class SyncService {
         }
 
         // Separate by what needs to happen
+        // Note: unchanged files are already filtered out in compareIndexes
         const conflicts = changes.filter(c => c.status === 'conflict');
         const toPull = changes.filter(c => {
             if (c.status === 'conflict') return false;
             if (direction === 'push') return false;
-            // Pull: new remote files, or modified remote (when not local-only modified)
+            // Pull: remote-only files (added on remote), or files where remote has changes
             const remote = remoteIndex.get(c.path);
             const local = localIndex.get(c.path);
-            if (!remote && local) return false; // Local-only file
-            if (remote && !local) return true;  // Remote-only file
-            // Both exist - check if remote changed
+            if (!remote && local) return false; // Local-only file, should push not pull
+            if (remote && !local) return true;  // Remote-only file (new from remote)
+            // Both exist and content differs - check who changed
             const lastSha = lastSyncState?.fileShas[c.path];
-            return lastSha && remote && remote.sha !== lastSha;
+            const lastHash = lastSyncState?.fileHashes[c.path];
+            const remoteChanged = !lastSha || (remote && remote.sha !== lastSha);
+            const localChanged = !lastHash || (local && local.hash !== lastHash);
+            // Pull if only remote changed, or if no sync state and we prefer remote
+            return remoteChanged && !localChanged;
         });
         const toPush = changes.filter(c => {
             if (c.status === 'conflict') return false;
             if (direction === 'pull') return false;
-            // Push: new local files, or modified local
+            // Push: local-only files (added locally), or files where local has changes
             const remote = remoteIndex.get(c.path);
             const local = localIndex.get(c.path);
-            if (!local && remote) return false; // Remote-only file
-            if (local && !remote) return true;  // Local-only file
-            // Both exist - check if local changed
+            if (!local && remote) return false; // Remote-only file, should pull not push
+            if (local && !remote) return true;  // Local-only file (new locally)
+            // Both exist and content differs - check who changed
+            const lastSha = lastSyncState?.fileShas[c.path];
             const lastHash = lastSyncState?.fileHashes[c.path];
-            return lastHash && local && local.hash !== lastHash;
+            const remoteChanged = !lastSha || (remote && remote.sha !== lastSha);
+            const localChanged = !lastHash || (local && local.hash !== lastHash);
+            // Push if only local changed
+            return localChanged && !remoteChanged;
         });
 
         let result: SyncResult = {

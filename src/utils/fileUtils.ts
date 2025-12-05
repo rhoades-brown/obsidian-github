@@ -97,6 +97,46 @@ export function hashBinaryContent(buffer: ArrayBuffer): string {
 }
 
 /**
+ * Compute a Git blob SHA for content (compatible with GitHub's SHA)
+ * Git blob SHA = SHA-1 of "blob {size}\0{content}"
+ * Note: Normalizes line endings to LF to match GitHub's storage
+ */
+export async function computeGitBlobSha(content: string): Promise<string> {
+    // Normalize line endings to LF (GitHub stores files with LF)
+    const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    const encoder = new TextEncoder();
+    const contentBytes = encoder.encode(normalizedContent);
+    const header = `blob ${contentBytes.length}\0`;
+    const headerBytes = encoder.encode(header);
+
+    const combined = new Uint8Array(headerBytes.length + contentBytes.length);
+    combined.set(headerBytes);
+    combined.set(contentBytes, headerBytes.length);
+
+    const hashBuffer = await crypto.subtle.digest('SHA-1', combined);
+    const hashArray = new Uint8Array(hashBuffer);
+    return Array.from(hashArray).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Compute a Git blob SHA for binary content
+ */
+export async function computeGitBlobShaBinary(buffer: ArrayBuffer): Promise<string> {
+    const contentBytes = new Uint8Array(buffer);
+    const header = `blob ${contentBytes.length}\0`;
+    const headerBytes = new TextEncoder().encode(header);
+
+    const combined = new Uint8Array(headerBytes.length + contentBytes.length);
+    combined.set(headerBytes);
+    combined.set(contentBytes, headerBytes.length);
+
+    const hashBuffer = await crypto.subtle.digest('SHA-1', combined);
+    const hashArray = new Uint8Array(hashBuffer);
+    return Array.from(hashArray).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
  * Read a text file from the vault
  */
 export async function readTextFile(vault: Vault, path: string): Promise<string | null> {

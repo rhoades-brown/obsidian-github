@@ -173,6 +173,7 @@ const DEFAULT_SETTINGS: GitHubOctokitSettings = {
 	ignorePatterns: [
 		'.obsidian/workspace.json',
 		'.obsidian/workspace-mobile.json',
+		'.obsidian/github-sync-metadata.json',
 		'.git/**',
 		'.gitignore',
 	],
@@ -621,11 +622,16 @@ export default class GitHubOctokitPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = await this.loadData() || {};
+		// Extract syncState before merging with defaults
+		const { syncState, ...settingsData } = data;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
 	}
 
 	async saveSettings() {
-		await this.saveData(this.settings);
+		// Preserve syncState when saving settings
+		const data = await this.loadData() || {};
+		await this.saveData({ ...this.settings, syncState: data.syncState });
 	}
 
 	async loadSyncState() {
@@ -634,6 +640,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 	}
 
 	async saveSyncState() {
+		// Preserve settings when saving syncState
 		const data = await this.loadData() || {};
 		data.syncState = this.syncState;
 		await this.saveData(data);
@@ -937,6 +944,56 @@ class GitHubOctokitSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.subfolderPath = value;
 					await this.plugin.saveSettings();
+				}));
+
+		// Ignore Patterns Section
+		containerEl.createEl('h2', { text: 'Ignore Patterns' });
+		containerEl.createEl('p', {
+			text: 'Files matching these patterns will be excluded from sync. Use glob patterns (e.g., "*.tmp", ".obsidian/workspace.json").',
+			cls: 'setting-item-description'
+		});
+
+		const patternsContainer = containerEl.createDiv({ cls: 'github-octokit-ignore-patterns' });
+
+		// Display current patterns
+		this.plugin.settings.ignorePatterns.forEach((pattern, index) => {
+			new Setting(patternsContainer)
+				.setName(pattern)
+				.addButton(button => button
+					.setIcon('trash')
+					.setTooltip('Remove pattern')
+					.onClick(async () => {
+						this.plugin.settings.ignorePatterns.splice(index, 1);
+						await this.plugin.saveSettings();
+						this.plugin.syncService.configure(
+							this.plugin.settings.ignorePatterns,
+							this.plugin.settings.subfolderPath
+						);
+						this.display();
+					}));
+		});
+
+		// Add new pattern
+		new Setting(containerEl)
+			.setName('Add Pattern')
+			.setDesc('Add a new ignore pattern')
+			.addText(text => text
+				.setPlaceholder('.obsidian/cache/**')
+				.onChange(() => {})) // Keep text while typing
+			.addButton(button => button
+				.setButtonText('Add')
+				.onClick(async () => {
+					const input = containerEl.querySelector('.github-octokit-ignore-patterns + .setting-item input') as HTMLInputElement;
+					const value = input?.value?.trim();
+					if (value && !this.plugin.settings.ignorePatterns.includes(value)) {
+						this.plugin.settings.ignorePatterns.push(value);
+						await this.plugin.saveSettings();
+						this.plugin.syncService.configure(
+							this.plugin.settings.ignorePatterns,
+							this.plugin.settings.subfolderPath
+						);
+						this.display();
+					}
 				}));
 
 		// Sync Configuration Section

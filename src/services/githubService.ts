@@ -493,6 +493,14 @@ export class GitHubService {
                     tree: treeItems,
                 });
 
+                // If the new tree is the same as the base tree, no changes were made
+                if (newTreeData.sha === baseTreeSha) {
+                    return {
+                        commitSha: currentCommitSha,
+                        treeSha: baseTreeSha,
+                    };
+                }
+
                 // Create the commit
                 const { data: newCommitData } = await octokit.rest.git.createCommit({
                     owner,
