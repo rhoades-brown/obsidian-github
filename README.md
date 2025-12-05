@@ -1,8 +1,10 @@
 # GitHub Octokit - Obsidian Plugin
 
-Sync your Obsidian Vault with a GitHub repository using the the GitHub official API Octokit. 
+[![CI](https://github.com/rhoades-brown/obsidian-github/actions/workflows/ci.yml/badge.svg)](https://github.com/rhoades-brown/obsidian-github/actions/workflows/ci.yml)
 
-The aim of this tool is to provide a simple and efficient way to sync your Obsidian vault with a GitHub repository without using any external dependencies.  This enables the use of GitHub as a remote backup and collaboration tool for your Obsidian vault on any device.
+Sync your Obsidian Vault with a GitHub repository using the official GitHub API (Octokit).
+
+This plugin provides a simple and efficient way to sync your Obsidian vault with a GitHub repository without external dependencies like Git. Use GitHub as a remote backup and collaboration tool for your Obsidian vault on any device.
 
 ## Features
 
@@ -11,8 +13,11 @@ The aim of this tool is to provide a simple and efficient way to sync your Obsid
 - **Visual diff view**: Side-by-side and inline diff comparison for conflicting files
 - **Batch commits**: Efficiently commits multiple files in a single operation
 - **Auto-sync options**: Sync on save, on interval, or on startup
-- **Subfolder mapping**: Sync a specific folder in your vault to a subfolder in the repository
+- **Subfolder mapping**: Sync your vault to a specific subfolder in the repository
 - **Ignore patterns**: Configure which files and folders to exclude from sync
+- **Commit history**: View recent commits directly in Obsidian
+- **Sync logging**: Debug sync operations with configurable logging
+- **File status indicators**: See at a glance which files are added, modified, or deleted
 
 ## Installation
 
@@ -103,25 +108,30 @@ When a file has been modified both locally and on GitHub:
 | **Conflict Strategy** | Default resolution: ask, keep-local, keep-remote, keep-both |
 | **Status Bar** | Show/hide sync status in status bar |
 | **Notifications** | Show/hide sync notifications |
+| **Enable Logging** | Log sync operations for debugging |
+| **Log Level** | Minimum log level: debug, info, warn, error |
+| **Persist Logs** | Save logs to a file in your vault |
 
 ## Ignore Patterns
 
 By default, the following are excluded from sync:
-- `.obsidian/` (Obsidian settings)
-- `.git/`
-- `node_modules/`
-- `.DS_Store`
+- `.obsidian/workspace.json`
+- `.obsidian/workspace-mobile.json`
+- `.obsidian/github-sync-metadata.json`
+- `.git/**`
+- `.gitignore`
 
-Add custom patterns in settings using glob syntax:
+Add custom patterns in Settings → GitHub Octokit → Ignore Patterns:
 - `*.log` - All log files
 - `private/**` - Everything in the private folder
 - `*.tmp` - All .tmp files
+- `.obsidian/**` - All Obsidian settings (if desired)
 
 ## Development
 
 ```bash
 # Clone and install
-git clone <repo>
+git clone https://github.com/rhoades-brown/obsidian-github.git
 cd obsidian-github
 npm install
 
@@ -131,8 +141,21 @@ npm run build
 # Run tests
 npm test
 
-# Watch mode
+# Watch mode (rebuilds on file changes)
 npm run dev
+```
+
+### Project Structure
+
+```
+obsidian-github/
+├── main.ts              # Plugin entry point
+├── src/
+│   ├── services/        # Core services (GitHub API, Sync, Logger)
+│   ├── views/           # UI components (DiffView, SyncView)
+│   └── utils/           # Utility functions (file, diff, encoding)
+├── tests/               # Jest test suites
+└── styles.css           # Plugin styles
 ```
 
 ## Troubleshooting
@@ -150,6 +173,29 @@ npm run dev
 ### "Conflict detected"
 - Open the sync panel to view and resolve conflicts
 - Use the diff view to compare versions
+
+### Files keep re-syncing
+- Check if sync state is being preserved (enable logging to debug)
+- Verify line endings are consistent (plugin normalizes to LF)
+- Ensure ignore patterns are correctly configured
+
+### Debug with Logs
+1. Enable logging in Settings → GitHub Octokit → Logging
+2. Set log level to "Debug" for verbose output
+3. Open the debug console (macOS → cmd+option+i; Windows → ctrl+shift+i) to see real-time logs
+4. Or click "View Logs" in settings to see recent entries
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`npm test`)
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 ## License
 
