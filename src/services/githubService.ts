@@ -426,90 +426,111 @@ export class GitHubService {
         repo: string,
         branch: string,
         message: string,
-        changes: BatchFileChange[]
+        changes: BatchFileChange[],
+        options?: { retryCount?: number }
     ): Promise<{ commitSha: string; treeSha: string }> {
         const octokit = this.ensureAuthenticated();
+        const maxRetries = options?.retryCount ?? 3;
 
-        // Get the current commit SHA for the branch
-        const { data: refData } = await octokit.rest.git.getRef({
-            owner,
-            repo,
-            ref: `heads/${branch}`,
-        });
-        const currentCommitSha = refData.object.sha;
-
-        // Get the current tree SHA
-        const { data: commitData } = await octokit.rest.git.getCommit({
-            owner,
-            repo,
-            commit_sha: currentCommitSha,
-        });
-        const baseTreeSha = commitData.tree.sha;
-
-        // Create blobs for all new/updated files
-        const treeItems: Array<{
-            path: string;
-            mode: '100644' | '100755' | '040000' | '160000' | '120000';
-            type: 'blob' | 'tree' | 'commit';
-            sha?: string | null;
-        }> = [];
-
-        for (const change of changes) {
-            if (change.action === 'delete') {
-                // For deletions, we set sha to null
-                treeItems.push({
-                    path: change.path,
-                    mode: '100644',
-                    type: 'blob',
-                    sha: null,
-                });
-            } else {
-                // Create a blob for the content
-                const { data: blobData } = await octokit.rest.git.createBlob({
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                // Get the current commit SHA for the branch (fresh on each attempt)
+                const { data: refData } = await octokit.rest.git.getRef({
                     owner,
                     repo,
-                    content: change.content!,
-                    encoding: change.encoding || 'base64',
+                    ref: `heads/${branch}`,
+                });
+                const currentCommitSha = refData.object.sha;
+
+                // Get the current tree SHA
+                const { data: commitData } = await octokit.rest.git.getCommit({
+                    owner,
+                    repo,
+                    commit_sha: currentCommitSha,
+                });
+                const baseTreeSha = commitData.tree.sha;
+
+                // Create blobs for all new/updated files
+                const treeItems: Array<{
+                    path: string;
+                    mode: '100644' | '100755' | '040000' | '160000' | '120000';
+                    type: 'blob' | 'tree' | 'commit';
+                    sha?: string | null;
+                }> = [];
+
+                for (const change of changes) {
+                    if (change.action === 'delete') {
+                        // For deletions, we set sha to null
+                        treeItems.push({
+                            path: change.path,
+                            mode: '100644',
+                            type: 'blob',
+                            sha: null,
+                        });
+                    } else {
+                        // Create a blob for the content
+                        const { data: blobData } = await octokit.rest.git.createBlob({
+                            owner,
+                            repo,
+                            content: change.content!,
+                            encoding: change.encoding || 'base64',
+                        });
+
+                        treeItems.push({
+                            path: change.path,
+                            mode: '100644',
+                            type: 'blob',
+                            sha: blobData.sha,
+                        });
+                    }
+                }
+
+                // Create a new tree with all changes
+                const { data: newTreeData } = await octokit.rest.git.createTree({
+                    owner,
+                    repo,
+                    base_tree: baseTreeSha,
+                    tree: treeItems,
                 });
 
-                treeItems.push({
-                    path: change.path,
-                    mode: '100644',
-                    type: 'blob',
-                    sha: blobData.sha,
+                // Create the commit
+                const { data: newCommitData } = await octokit.rest.git.createCommit({
+                    owner,
+                    repo,
+                    message,
+                    tree: newTreeData.sha,
+                    parents: [currentCommitSha],
                 });
+
+                // Update the branch reference to point to the new commit
+                await octokit.rest.git.updateRef({
+                    owner,
+                    repo,
+                    ref: `heads/${branch}`,
+                    sha: newCommitData.sha,
+                    force: false,
+                });
+
+                return {
+                    commitSha: newCommitData.sha,
+                    treeSha: newTreeData.sha,
+                };
+            } catch (error) {
+                const isNotFastForward = error instanceof Error &&
+                    error.message.includes('Update is not a fast forward');
+
+                if (isNotFastForward && attempt < maxRetries - 1) {
+                    // Remote was updated, wait briefly and retry with fresh ref
+                    console.log(`Batch commit attempt ${attempt + 1} failed (not fast-forward), retrying...`);
+                    await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+                    continue;
+                }
+
+                throw error;
             }
         }
 
-        // Create a new tree with all changes
-        const { data: newTreeData } = await octokit.rest.git.createTree({
-            owner,
-            repo,
-            base_tree: baseTreeSha,
-            tree: treeItems,
-        });
-
-        // Create the commit
-        const { data: newCommitData } = await octokit.rest.git.createCommit({
-            owner,
-            repo,
-            message,
-            tree: newTreeData.sha,
-            parents: [currentCommitSha],
-        });
-
-        // Update the branch reference to point to the new commit
-        await octokit.rest.git.updateRef({
-            owner,
-            repo,
-            ref: `heads/${branch}`,
-            sha: newCommitData.sha,
-        });
-
-        return {
-            commitSha: newCommitData.sha,
-            treeSha: newTreeData.sha,
-        };
+        throw new Error('Batch commit failed after maximum retries');
     }
 
     // ========================================================================

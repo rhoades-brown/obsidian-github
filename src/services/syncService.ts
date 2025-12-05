@@ -16,7 +16,7 @@ import {
 // ============================================================================
 
 /** Status of a file in the sync comparison */
-export type FileChangeStatus = 'added' | 'modified' | 'deleted' | 'unchanged' | 'conflict';
+export type FileChangeStatus = 'added' | 'modified' | 'deleted' | 'unchanged' | 'conflict' | 'renamed';
 
 /** Represents a file's sync state */
 export interface FileSyncState {

@@ -5,7 +5,7 @@ import { LogEntry } from '../services/loggerService';
 
 export const SYNC_VIEW_TYPE = 'github-octokit-sync-view';
 
-type FileGroupStatus = 'added' | 'modified' | 'deleted' | 'conflict';
+type FileGroupStatus = 'added' | 'modified' | 'deleted' | 'conflict' | 'renamed';
 
 interface FileGroup {
     status: FileGroupStatus;
@@ -20,6 +20,8 @@ export class SyncView extends ItemView {
     private stagedPaths: Set<string> = new Set();
     private isRefreshing = false;
     private logUnsubscribe: (() => void) | null = null;
+    private commitsExpanded = true;
+    private logsExpanded = false;
 
     constructor(leaf: WorkspaceLeaf, plugin: GitHubOctokitPlugin) {
         super(leaf);
@@ -171,11 +173,13 @@ export class SyncView extends ItemView {
         // Action buttons
         this.renderActions(container);
 
-        // Commit history
+        // Commit history (foldable)
         this.renderCommitHistory(container);
 
-        // Logs section
-        this.renderLogs(container);
+        // Logs section (foldable, only if logging enabled)
+        if (this.plugin.settings.logging.enabled) {
+            this.renderLogs(container);
+        }
     }
 
     private renderHeader(container: HTMLElement): void {
@@ -226,9 +230,10 @@ export class SyncView extends ItemView {
         // Group files by status
         const groups: FileGroup[] = [
             { status: 'conflict', label: 'Conflicts', icon: '⚠️', files: [] },
-            { status: 'added', label: 'Added', icon: '+', files: [] },
-            { status: 'modified', label: 'Modified', icon: '~', files: [] },
+            { status: 'added', label: 'Added', icon: 'A', files: [] },
+            { status: 'modified', label: 'Modified', icon: '+', files: [] },
             { status: 'deleted', label: 'Deleted', icon: '-', files: [] },
+            { status: 'renamed', label: 'Renamed', icon: 'R', files: [] },
         ];
 
         for (const change of this.changes) {
@@ -260,8 +265,11 @@ export class SyncView extends ItemView {
             checkbox.checked = isStaged;
             checkbox.addEventListener('change', () => this.toggleStaged(file.path));
 
-            // File name
-            const fileName = fileEl.createSpan({ cls: 'file-name', text: file.path });
+            // File name with hover tooltip
+            const pathParts = file.path.split('/');
+            const displayName = pathParts[pathParts.length - 1];
+            const fileNameEl = fileEl.createSpan({ cls: 'file-name', text: displayName });
+            fileNameEl.setAttribute('title', file.path);
 
             // Actions
             const actions = fileEl.createDiv({ cls: 'file-actions' });
@@ -358,8 +366,20 @@ export class SyncView extends ItemView {
     private async renderCommitHistory(container: HTMLElement): Promise<void> {
         const historySection = container.createDiv({ cls: 'commit-history' });
 
-        const header = historySection.createDiv({ cls: 'history-header' });
-        header.createEl('h4', { text: 'Recent Commits' });
+        // Foldable header
+        const header = historySection.createDiv({ cls: 'history-header foldable-header' });
+        const chevron = header.createSpan({ cls: `fold-chevron ${this.commitsExpanded ? 'expanded' : ''}` });
+        chevron.textContent = '▶';
+        header.createEl('h4', { text: 'Commit History' });
+
+        header.addEventListener('click', () => {
+            this.commitsExpanded = !this.commitsExpanded;
+            this.render();
+        });
+
+        if (!this.commitsExpanded) {
+            return;
+        }
 
         if (!this.plugin.settings.repo) {
             historySection.createEl('p', { text: 'No repository selected', cls: 'history-empty' });
@@ -408,22 +428,26 @@ export class SyncView extends ItemView {
     private renderLogs(container: HTMLElement): void {
         const logsSection = container.createDiv({ cls: 'sync-logs-section' });
 
-        // Header with controls
-        const header = logsSection.createDiv({ cls: 'logs-header' });
+        // Foldable header
+        const header = logsSection.createDiv({ cls: 'logs-header foldable-header' });
+        const chevron = header.createSpan({ cls: `fold-chevron ${this.logsExpanded ? 'expanded' : ''}` });
+        chevron.textContent = '▶';
         header.createEl('h4', { text: 'Sync Logs' });
 
-        const controls = header.createDiv({ cls: 'logs-controls' });
-
-        // Log level filter
-        const levelSelect = controls.createEl('select', { cls: 'logs-level-select' });
-        ['all', 'debug', 'info', 'warn', 'error'].forEach(level => {
-            const option = levelSelect.createEl('option', { text: level, value: level });
-            if (level === 'all') option.selected = true;
+        header.addEventListener('click', (e) => {
+            // Don't toggle if clicking on controls
+            if ((e.target as HTMLElement).closest('.logs-controls')) return;
+            this.logsExpanded = !this.logsExpanded;
+            this.render();
         });
+
+        // Controls (always visible in header)
+        const controls = header.createDiv({ cls: 'logs-controls' });
 
         // Copy button
         const copyBtn = controls.createEl('button', { text: 'Copy', cls: 'logs-copy-btn' });
-        copyBtn.addEventListener('click', () => {
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const text = this.plugin.logger.exportAsText();
             navigator.clipboard.writeText(text);
             new Notice('Logs copied to clipboard');
@@ -431,9 +455,25 @@ export class SyncView extends ItemView {
 
         // Clear button
         const clearBtn = controls.createEl('button', { text: 'Clear', cls: 'logs-clear-btn' });
-        clearBtn.addEventListener('click', () => {
+        clearBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             this.plugin.logger.clear();
-            this.renderLogEntries(logsContainer, 'all');
+            if (this.logsExpanded) {
+                this.renderLogEntries(logsContainer, 'all');
+            }
+        });
+
+        if (!this.logsExpanded) {
+            return;
+        }
+
+        // Log level filter (only when expanded)
+        const filterContainer = logsSection.createDiv({ cls: 'logs-filter' });
+        filterContainer.createSpan({ text: 'Filter: ' });
+        const levelSelect = filterContainer.createEl('select', { cls: 'logs-level-select' });
+        ['all', 'debug', 'info', 'warn', 'error'].forEach(level => {
+            const option = levelSelect.createEl('option', { text: level, value: level });
+            if (level === 'all') option.selected = true;
         });
 
         // Logs container
