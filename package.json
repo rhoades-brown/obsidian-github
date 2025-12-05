@@ -1,6 +1,6 @@
 {
 	"name": "github-octokit",
-	"version": "1.0.0",
+	"version": "0.1.0",
 	"description": "Sync your Obsidian vault with GitHub using the Octokit API.",
 	"main": "main.js",
 	"scripts": {
