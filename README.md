@@ -1,94 +1,156 @@
-# Obsidian Sample Plugin
+# GitHub Octokit - Obsidian Plugin
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Sync your Obsidian Vault with a GitHub repository using the the GitHub official API Octokit. 
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+The aim of this tool is to provide a simple and efficient way to sync your Obsidian vault with a GitHub repository without using any external dependencies.  This enables the use of GitHub as a remote backup and collaboration tool for your Obsidian vault on any device.
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+## Features
 
-## First time developing plugins?
+- **Two-way sync**: Pull changes from GitHub and push local changes
+- **Conflict detection**: Automatically detects when files have been modified both locally and remotely
+- **Visual diff view**: Side-by-side and inline diff comparison for conflicting files
+- **Batch commits**: Efficiently commits multiple files in a single operation
+- **Auto-sync options**: Sync on save, on interval, or on startup
+- **Subfolder mapping**: Sync a specific folder in your vault to a subfolder in the repository
+- **Ignore patterns**: Configure which files and folders to exclude from sync
 
-Quick starting guide for new plugin devs:
+## Installation
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+### From Obsidian Community Plugins (Coming Soon)
 
-## Releasing new releases
+1. Open Settings → Community Plugins
+2. Search for "GitHub Octokit"
+3. Click Install, then Enable
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+### Manual Installation
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+1. Download `main.js`, `manifest.json`, and `styles.css` from the latest release
+2. Create a folder `<vault>/.obsidian/plugins/github-octokit/`
+3. Copy the downloaded files into this folder
+4. Reload Obsidian and enable the plugin in Settings → Community Plugins
 
-## Adding your plugin to the community plugin list
+## Setup
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+### 1. Generate a GitHub Personal Access Token (PAT)
 
-## How to use
+1. Go to [GitHub Settings → Developer Settings → Personal Access Tokens](https://github.com/settings/tokens)
+2. Click "Generate new token (classic)"
+3. Give it a descriptive name (e.g., "Obsidian Vault Sync")
+4. Select scopes:
+   - `repo` (Full control of private repositories)
+5. Click "Generate token" and copy it
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+### 2. Configure the Plugin
 
-## Manually installing the plugin
+1. Open Obsidian Settings → GitHub Octokit
+2. Paste your Personal Access Token
+3. Click "Connect" to authenticate
+4. Select a repository from the dropdown
+5. Optionally configure:
+   - Branch name (default: main)
+   - Vault subfolder to sync
+   - Sync triggers (on save, interval, startup)
+   - Commit message template
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+## Usage
 
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint ./src/`
+### Manual Sync
 
-## Funding URL
+- **Command Palette**: Press `Ctrl/Cmd + P` and search for:
+  - "GitHub Octokit: Sync now" - Full bidirectional sync
+  - "GitHub Octokit: Pull from GitHub" - Download remote changes
+  - "GitHub Octokit: Push to GitHub" - Upload local changes
 
-You can include funding URLs where people who use your plugin can financially support it.
+- **Ribbon Icon**: Click the GitHub icon in the left ribbon, or right-click for quick actions
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
+- **Status Bar**: Click the sync status in the bottom-right to open the sync panel
 
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+### Sync Panel
+
+Open the sync panel via:
+- Command: "GitHub Octokit: Open sync panel"
+- Right-click the ribbon icon → "Open Sync Panel"
+- Click the status bar indicator
+
+The sync panel shows:
+- Files with changes (grouped by status)
+- Conflict resolution options
+- Recent commit history
+
+### Resolving Conflicts
+
+When a file has been modified both locally and on GitHub:
+
+1. The file appears in the "Conflicts" section
+2. Click "Diff" to see a side-by-side comparison
+3. Choose a resolution:
+   - **Keep Local**: Use your local version
+   - **Keep Remote**: Use the GitHub version
+   - **Manual**: Edit the file yourself, then sync again
+
+## Configuration Options
+
+| Setting | Description |
+|---------|-------------|
+| **GitHub Token** | Your Personal Access Token |
+| **Repository** | The GitHub repo to sync with |
+| **Branch** | Branch name (default: main) |
+| **Vault Subfolder** | Only sync files in this folder |
+| **Sync on Save** | Auto-sync when you save a file |
+| **Sync on Interval** | Sync automatically every X minutes |
+| **Sync on Startup** | Sync when Obsidian opens |
+| **Commit Message** | Template for commit messages. Variables: `{date}`, `{action}` |
+| **Conflict Strategy** | Default resolution: ask, keep-local, keep-remote, keep-both |
+| **Status Bar** | Show/hide sync status in status bar |
+| **Notifications** | Show/hide sync notifications |
+
+## Ignore Patterns
+
+By default, the following are excluded from sync:
+- `.obsidian/` (Obsidian settings)
+- `.git/`
+- `node_modules/`
+- `.DS_Store`
+
+Add custom patterns in settings using glob syntax:
+- `*.log` - All log files
+- `private/**` - Everything in the private folder
+- `*.tmp` - All .tmp files
+
+## Development
+
+```bash
+# Clone and install
+git clone <repo>
+cd obsidian-github
+npm install
+
+# Build
+npm run build
+
+# Run tests
+npm test
+
+# Watch mode
+npm run dev
 ```
 
-If you have multiple URLs, you can also do:
+## Troubleshooting
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
+### "Authentication failed"
+- Verify your token has the `repo` scope
+- Check if the token has expired
+- Try generating a new token
 
-## API Documentation
+### "Rate limit exceeded"
+- GitHub limits API requests (5000/hour for authenticated users)
+- Wait for the reset time shown in the notification
+- Reduce sync frequency in settings
 
-See https://github.com/obsidianmd/obsidian-api
+### "Conflict detected"
+- Open the sync panel to view and resolve conflicts
+- Use the diff view to compare versions
+
+## License
+
+MIT

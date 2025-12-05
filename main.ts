@@ -1,6 +1,8 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, WorkspaceLeaf } from 'obsidian';
 import { GitHubService, type GitHubRepo } from './src/services/githubService';
 import { SyncService, PersistedSyncState, SyncResult } from './src/services/syncService';
+import { DiffView, DIFF_VIEW_TYPE } from './src/views/DiffView';
+import { SyncView, SYNC_VIEW_TYPE } from './src/views/SyncView';
 
 // GitHub Octokit Plugin - Sync your Obsidian vault with GitHub
 
@@ -196,22 +198,72 @@ export default class GitHubOctokitPlugin extends Plugin {
 			this.settings.subfolderPath
 		);
 
+		// Register custom views
+		this.registerView(DIFF_VIEW_TYPE, (leaf) => new DiffView(leaf));
+		this.registerView(SYNC_VIEW_TYPE, (leaf) => new SyncView(leaf, this));
+
 		// Try to authenticate if we have a stored token
 		if (this.settings.auth.token) {
 			await this.validateAndConnect();
 		}
 
 		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('github', 'GitHub Octokit', async (_evt: MouseEvent) => {
-			// Called when the user clicks the icon - trigger sync
-			await this.performSync();
+		const ribbonIconEl = this.addRibbonIcon('github', 'GitHub Octokit - Click to sync, right-click for menu', async (evt: MouseEvent) => {
+			if (evt.button === 0) {
+				// Left click - trigger sync
+				await this.performSync();
+			}
 		});
 		ribbonIconEl.addClass('github-octokit-ribbon-class');
+
+		// Right-click context menu
+		ribbonIconEl.addEventListener('contextmenu', (evt: MouseEvent) => {
+			evt.preventDefault();
+			const menu = new (require('obsidian').Menu)();
+
+			menu.addItem((item: any) => {
+				item.setTitle('⟳ Sync Now')
+					.setIcon('refresh-cw')
+					.onClick(() => this.performSync());
+			});
+
+			menu.addItem((item: any) => {
+				item.setTitle('⬇ Pull from GitHub')
+					.setIcon('download')
+					.onClick(() => this.performSync('pull'));
+			});
+
+			menu.addItem((item: any) => {
+				item.setTitle('⬆ Push to GitHub')
+					.setIcon('upload')
+					.onClick(() => this.performSync('push'));
+			});
+
+			menu.addSeparator();
+
+			menu.addItem((item: any) => {
+				item.setTitle('Open Sync Panel')
+					.setIcon('layout-sidebar-right')
+					.onClick(() => this.openSyncView());
+			});
+
+			menu.addItem((item: any) => {
+				item.setTitle('Settings')
+					.setIcon('settings')
+					.onClick(() => {
+						(this.app as any).setting.open();
+						(this.app as any).setting.openTabById('github-octokit');
+					});
+			});
+
+			menu.showAtMouseEvent(evt);
+		});
 
 		// This adds a status bar item to the bottom of the app.
 		if (this.settings.showStatusBar) {
 			this.statusBarItem = this.addStatusBarItem();
 			this.updateStatusBar();
+			this.setupStatusBarClick();
 		}
 
 		// Command: Sync Now
@@ -250,6 +302,46 @@ export default class GitHubOctokitPlugin extends Plugin {
 			}
 		});
 
+		// Command: Open diff view
+		this.addCommand({
+			id: 'open-diff-view',
+			name: 'Open diff view',
+			callback: async () => {
+				await this.openDiffView();
+			}
+		});
+
+		// Command: Open sync panel
+		this.addCommand({
+			id: 'open-sync-panel',
+			name: 'Open sync panel',
+			callback: async () => {
+				await this.openSyncView();
+			}
+		});
+
+		// Command: View conflicts
+		this.addCommand({
+			id: 'view-conflicts',
+			name: 'View sync conflicts',
+			callback: async () => {
+				const view = await this.openSyncView();
+				if (view) {
+					new Notice('Conflicts are shown at the top of the sync panel');
+				}
+			}
+		});
+
+		// Command: Open settings
+		this.addCommand({
+			id: 'open-settings',
+			name: 'Open GitHub settings',
+			callback: () => {
+				(this.app as any).setting.open();
+				(this.app as any).setting.openTabById('github-octokit');
+			}
+		});
+
 		// This adds a settings tab
 		this.addSettingTab(new GitHubOctokitSettingTab(this.app, this));
 
@@ -259,6 +351,16 @@ export default class GitHubOctokitPlugin extends Plugin {
 		// Sync on startup if enabled
 		if (this.settings.syncSchedule.syncOnStartup && this.githubService.isAuthenticated && this.settings.repo) {
 			setTimeout(() => this.performSync(), 3000); // Delay to let Obsidian fully load
+		}
+
+		// First-run setup notice
+		if (!this.settings.auth.token) {
+			setTimeout(() => {
+				new Notice(
+					'GitHub Octokit: Welcome! Open Settings → GitHub Octokit to configure sync.',
+					15000
+				);
+			}, 2000);
 		}
 	}
 
@@ -298,15 +400,44 @@ export default class GitHubOctokitPlugin extends Plugin {
 	updateStatusBar(): void {
 		if (!this.statusBarItem) return;
 
+		let text: string;
+		let tooltip: string;
+
 		if (this.isSyncing) {
-			this.statusBarItem.setText('GitHub: Syncing...');
+			text = '⟳ Syncing...';
+			tooltip = 'GitHub sync in progress';
 		} else if (this.githubService.isAuthenticated) {
 			const user = this.githubService.user?.login || 'Unknown';
 			const repo = this.settings.repo?.name || 'No repo';
-			this.statusBarItem.setText(`GitHub: ${user}/${repo}`);
+			const lastSync = this.syncState?.lastSyncTime
+				? new Date(this.syncState.lastSyncTime).toLocaleTimeString()
+				: 'Never';
+			text = `⬡ ${repo}`;
+			tooltip = `GitHub: ${user}/${repo}\nLast sync: ${lastSync}\nClick to open sync panel`;
 		} else {
-			this.statusBarItem.setText('GitHub: Not connected');
+			text = '⬡ Not connected';
+			tooltip = 'GitHub: Not connected\nClick to configure';
 		}
+
+		this.statusBarItem.setText(text);
+		this.statusBarItem.setAttr('aria-label', tooltip);
+	}
+
+	/**
+	 * Set up status bar click handler
+	 */
+	private setupStatusBarClick(): void {
+		if (!this.statusBarItem) return;
+
+		this.statusBarItem.addClass('mod-clickable');
+		this.statusBarItem.addEventListener('click', async () => {
+			if (this.githubService.isAuthenticated) {
+				await this.openSyncView();
+			} else {
+				(this.app as any).setting.open();
+				(this.app as any).setting.openTabById('github-octokit');
+			}
+		});
 	}
 
 	/**
@@ -417,11 +548,41 @@ export default class GitHubOctokitPlugin extends Plugin {
 			return result;
 		} catch (error) {
 			console.error('Sync error:', error);
-			new Notice(`Sync error: ${error instanceof Error ? error.message : String(error)}`);
+			this.handleSyncError(error);
 			return null;
 		} finally {
 			this.isSyncing = false;
 			this.updateStatusBar();
+		}
+	}
+
+	/**
+	 * Handle sync errors with appropriate messages
+	 */
+	private async handleSyncError(error: unknown): Promise<void> {
+		const message = error instanceof Error ? error.message : String(error);
+
+		// Check for common error types
+		if (message.includes('401') || message.includes('Bad credentials')) {
+			new Notice('Authentication failed. Please check your GitHub token in settings.', 8000);
+		} else if (message.includes('403') || message.includes('rate limit')) {
+			try {
+				const rateLimit = await this.githubService.getRateLimitStatus();
+				const resetTime = rateLimit.reset
+					? rateLimit.reset.toLocaleTimeString()
+					: 'soon';
+				new Notice(`GitHub rate limit exceeded. Resets at ${resetTime}`, 8000);
+			} catch {
+				new Notice('GitHub rate limit exceeded. Please wait before retrying.', 8000);
+			}
+		} else if (message.includes('404')) {
+			new Notice('Repository or branch not found. Check your settings.', 8000);
+		} else if (message.includes('network') || message.includes('fetch')) {
+			new Notice('Network error. Check your internet connection.', 8000);
+		} else if (message.includes('conflict')) {
+			new Notice('Sync conflicts detected. Open the sync panel to resolve.', 8000);
+		} else {
+			new Notice(`Sync error: ${message}`, 5000);
 		}
 	}
 
@@ -442,6 +603,78 @@ export default class GitHubOctokitPlugin extends Plugin {
 		const data = await this.loadData() || {};
 		data.syncState = this.syncState;
 		await this.saveData(data);
+	}
+
+	/**
+	 * Open the diff view in a new leaf
+	 */
+	async openDiffView(filename?: string, localContent?: string, remoteContent?: string): Promise<DiffView | null> {
+		const leaf = this.app.workspace.getLeaf('split');
+		await leaf.setViewState({
+			type: DIFF_VIEW_TYPE,
+			active: true,
+		});
+
+		const view = leaf.view;
+		if (view instanceof DiffView) {
+			if (filename && localContent !== undefined && remoteContent !== undefined) {
+				view.setContent(filename, localContent, remoteContent);
+			}
+			return view;
+		}
+		return null;
+	}
+
+	/**
+	 * Get the active diff view if one is open
+	 */
+	getDiffView(): DiffView | null {
+		const leaves = this.app.workspace.getLeavesOfType(DIFF_VIEW_TYPE);
+		if (leaves.length > 0) {
+			const view = leaves[0].view;
+			if (view instanceof DiffView) return view;
+		}
+		return null;
+	}
+
+	/**
+	 * Open the sync view in the right sidebar
+	 */
+	async openSyncView(): Promise<SyncView | null> {
+		const existing = this.app.workspace.getLeavesOfType(SYNC_VIEW_TYPE);
+		if (existing.length > 0) {
+			this.app.workspace.revealLeaf(existing[0]);
+			const view = existing[0].view;
+			if (view instanceof SyncView) {
+				await view.refresh();
+				return view;
+			}
+		}
+
+		const leaf = this.app.workspace.getRightLeaf(false);
+		if (!leaf) return null;
+
+		await leaf.setViewState({
+			type: SYNC_VIEW_TYPE,
+			active: true,
+		});
+
+		this.app.workspace.revealLeaf(leaf);
+		const view = leaf.view;
+		if (view instanceof SyncView) return view;
+		return null;
+	}
+
+	/**
+	 * Get the active sync view if one is open
+	 */
+	getSyncView(): SyncView | null {
+		const leaves = this.app.workspace.getLeavesOfType(SYNC_VIEW_TYPE);
+		if (leaves.length > 0) {
+			const view = leaves[0].view;
+			if (view instanceof SyncView) return view;
+		}
+		return null;
 	}
 }
 
