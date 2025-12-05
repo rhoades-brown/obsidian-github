@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
 import type GitHubOctokitPlugin from '../../main';
 import { FileSyncState } from '../services/syncService';
+import { LogEntry } from '../services/loggerService';
 
 export const SYNC_VIEW_TYPE = 'github-octokit-sync-view';
 
@@ -18,6 +19,7 @@ export class SyncView extends ItemView {
     private changes: FileSyncState[] = [];
     private stagedPaths: Set<string> = new Set();
     private isRefreshing = false;
+    private logUnsubscribe: (() => void) | null = null;
 
     constructor(leaf: WorkspaceLeaf, plugin: GitHubOctokitPlugin) {
         super(leaf);
@@ -41,7 +43,11 @@ export class SyncView extends ItemView {
     }
 
     async onClose(): Promise<void> {
-        // Cleanup
+        // Cleanup log listener
+        if (this.logUnsubscribe) {
+            this.logUnsubscribe();
+            this.logUnsubscribe = null;
+        }
     }
 
     /**
@@ -167,6 +173,9 @@ export class SyncView extends ItemView {
 
         // Commit history
         this.renderCommitHistory(container);
+
+        // Logs section
+        this.renderLogs(container);
     }
 
     private renderHeader(container: HTMLElement): void {
@@ -393,6 +402,105 @@ export class SyncView extends ItemView {
                 text: 'Failed to load commits',
                 cls: 'history-error'
             });
+        }
+    }
+
+    private renderLogs(container: HTMLElement): void {
+        const logsSection = container.createDiv({ cls: 'sync-logs-section' });
+
+        // Header with controls
+        const header = logsSection.createDiv({ cls: 'logs-header' });
+        header.createEl('h4', { text: 'Sync Logs' });
+
+        const controls = header.createDiv({ cls: 'logs-controls' });
+
+        // Log level filter
+        const levelSelect = controls.createEl('select', { cls: 'logs-level-select' });
+        ['all', 'debug', 'info', 'warn', 'error'].forEach(level => {
+            const option = levelSelect.createEl('option', { text: level, value: level });
+            if (level === 'all') option.selected = true;
+        });
+
+        // Copy button
+        const copyBtn = controls.createEl('button', { text: 'Copy', cls: 'logs-copy-btn' });
+        copyBtn.addEventListener('click', () => {
+            const text = this.plugin.logger.exportAsText();
+            navigator.clipboard.writeText(text);
+            new Notice('Logs copied to clipboard');
+        });
+
+        // Clear button
+        const clearBtn = controls.createEl('button', { text: 'Clear', cls: 'logs-clear-btn' });
+        clearBtn.addEventListener('click', () => {
+            this.plugin.logger.clear();
+            this.renderLogEntries(logsContainer, 'all');
+        });
+
+        // Logs container
+        const logsContainer = logsSection.createDiv({ cls: 'sync-logs-container' });
+
+        // Initial render
+        this.renderLogEntries(logsContainer, 'all');
+
+        // Filter change
+        levelSelect.addEventListener('change', () => {
+            this.renderLogEntries(logsContainer, levelSelect.value);
+        });
+
+        // Subscribe to new log entries
+        if (this.logUnsubscribe) {
+            this.logUnsubscribe();
+        }
+        this.logUnsubscribe = this.plugin.logger.onEntry((entry: LogEntry) => {
+            const currentFilter = levelSelect.value;
+            if (currentFilter === 'all' || entry.level === currentFilter) {
+                this.appendLogEntry(logsContainer, entry);
+            }
+        });
+    }
+
+    private renderLogEntries(container: HTMLElement, filter: string): void {
+        container.empty();
+
+        const entries = this.plugin.logger.getRecentEntries(50);
+        const filtered = filter && filter !== 'all'
+            ? entries.filter(e => e.level === filter)
+            : entries;
+
+        if (filtered.length === 0) {
+            container.createDiv({ text: 'No log entries', cls: 'logs-empty' });
+            return;
+        }
+
+        // Show newest first
+        [...filtered].reverse().forEach(entry => {
+            this.appendLogEntry(container, entry, true);
+        });
+    }
+
+    private appendLogEntry(container: HTMLElement, entry: LogEntry, prepend = false): void {
+        const entryEl = createDiv({ cls: `log-entry log-${entry.level}` });
+
+        const time = entry.timestamp.toLocaleTimeString();
+        entryEl.createSpan({ text: `[${time}]`, cls: 'log-time' });
+        entryEl.createSpan({ text: `[${entry.level.toUpperCase()}]`, cls: 'log-level' });
+        entryEl.createSpan({ text: `[${entry.category}]`, cls: 'log-category' });
+        entryEl.createSpan({ text: entry.message, cls: 'log-message' });
+
+        if (entry.data) {
+            const dataEl = entryEl.createEl('pre', { cls: 'log-data' });
+            dataEl.textContent = JSON.stringify(entry.data, null, 2);
+        }
+
+        if (prepend && container.firstChild) {
+            container.insertBefore(entryEl, container.firstChild);
+        } else {
+            container.appendChild(entryEl);
+        }
+
+        // Limit entries displayed
+        while (container.children.length > 50) {
+            container.lastChild?.remove();
         }
     }
 }

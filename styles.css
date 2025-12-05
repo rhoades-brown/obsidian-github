@@ -371,3 +371,173 @@
     color: var(--text-muted);
     margin-top: 2px;
 }
+
+/* ============================================
+   Log Viewer Styles
+   ============================================ */
+
+.github-octokit-log-viewer {
+    max-width: 800px;
+}
+
+.log-viewer-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.log-viewer-controls select {
+    padding: 4px 8px;
+}
+
+.log-entries {
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: var(--font-monospace);
+    font-size: 12px;
+    background: var(--background-secondary);
+    border-radius: 4px;
+    padding: 8px;
+}
+
+.log-entry {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-time {
+    color: var(--text-muted);
+}
+
+.log-level {
+    font-weight: bold;
+    min-width: 60px;
+}
+
+.log-category {
+    color: var(--text-accent);
+}
+
+.log-message {
+    flex: 1;
+}
+
+.log-data {
+    width: 100%;
+    margin: 4px 0 0 0;
+    padding: 4px;
+    background: var(--background-primary);
+    border-radius: 2px;
+    font-size: 11px;
+    overflow-x: auto;
+}
+
+.log-debug .log-level { color: var(--text-muted); }
+.log-info .log-level { color: var(--text-accent); }
+.log-warn .log-level { color: var(--color-yellow); }
+.log-error .log-level { color: var(--color-red); }
+
+.log-empty,
+.logs-empty {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 20px;
+}
+
+/* ============================================
+   Sync Panel Logs Section
+   ============================================ */
+
+.sync-logs-section {
+    margin-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+    padding-top: 16px;
+}
+
+.logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.logs-header h4 {
+    margin: 0;
+}
+
+.logs-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.logs-controls select,
+.logs-controls button {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.sync-logs-container {
+    max-height: 250px;
+    overflow-y: auto;
+    font-family: var(--font-monospace);
+    font-size: 11px;
+    background: var(--background-secondary);
+    border-radius: 4px;
+    padding: 8px;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+}
+
+.sync-logs-container .log-entry {
+    padding: 3px 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.sync-logs-container .log-entry:last-child {
+    border-bottom: none;
+}
+
+.sync-logs-container .log-time,
+.sync-logs-container .log-level,
+.sync-logs-container .log-category,
+.sync-logs-container .log-message,
+.sync-logs-container .log-data {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* Make log viewer modal text selectable too */
+.github-octokit-log-viewer .log-entries {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+}
+
+.github-octokit-log-viewer .log-entry {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.github-octokit-log-viewer .log-time,
+.github-octokit-log-viewer .log-level,
+.github-octokit-log-viewer .log-category,
+.github-octokit-log-viewer .log-message,
+.github-octokit-log-viewer .log-data {
+    user-select: text;
+    -webkit-user-select: text;
+}

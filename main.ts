@@ -1,6 +1,7 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, WorkspaceLeaf } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, WorkspaceLeaf, Menu } from 'obsidian';
 import { GitHubService, type GitHubRepo } from './src/services/githubService';
 import { SyncService, PersistedSyncState, SyncResult } from './src/services/syncService';
+import { LoggerService, LoggerConfig, LogLevel, DEFAULT_LOGGER_CONFIG } from './src/services/loggerService';
 import { DiffView, DIFF_VIEW_TYPE } from './src/views/DiffView';
 import { SyncView, SYNC_VIEW_TYPE } from './src/views/SyncView';
 
@@ -80,6 +81,9 @@ interface GitHubOctokitSettings {
 	// UI preferences
 	showStatusBar: boolean;
 	showNotifications: boolean;
+
+	// Logging
+	logging: LoggerConfig;
 }
 
 /** Represents a file's state for sync comparison */
@@ -174,12 +178,20 @@ const DEFAULT_SETTINGS: GitHubOctokitSettings = {
 	],
 	showStatusBar: true,
 	showNotifications: true,
+	logging: {
+		enabled: true,
+		level: 'info',
+		persistToFile: false,
+		logFilePath: '.github-sync.log',
+		maxEntries: 1000,
+	},
 }
 
 export default class GitHubOctokitPlugin extends Plugin {
 	settings: GitHubOctokitSettings;
 	githubService: GitHubService;
 	syncService: SyncService;
+	logger: LoggerService;
 	private statusBarItem: HTMLElement | null = null;
 	private syncState: PersistedSyncState | null = null;
 	private syncIntervalId: number | null = null;
@@ -188,6 +200,11 @@ export default class GitHubOctokitPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		await this.loadSyncState();
+
+		// Initialize logger
+		this.logger = new LoggerService(this.settings.logging);
+		this.logger.initialize(this.app);
+		this.logger.info('Plugin', 'GitHub Octokit plugin loaded');
 
 		// Initialize services
 		this.githubService = new GitHubService();
@@ -491,22 +508,26 @@ export default class GitHubOctokitPlugin extends Plugin {
 	 */
 	async performSync(direction: 'pull' | 'push' | 'sync' = 'sync'): Promise<SyncResult | null> {
 		if (this.isSyncing) {
+			this.logger.debug('Sync', 'Sync already in progress, skipping');
 			new Notice('Sync already in progress...');
 			return null;
 		}
 
 		if (!this.githubService.isAuthenticated) {
+			this.logger.warn('Sync', 'Not authenticated, cannot sync');
 			new Notice('Not connected to GitHub. Configure in settings.');
 			return null;
 		}
 
 		if (!this.settings.repo) {
+			this.logger.warn('Sync', 'No repository selected');
 			new Notice('No repository selected. Configure in settings.');
 			return null;
 		}
 
 		this.isSyncing = true;
 		this.updateStatusBar();
+		this.logger.info('Sync', `Starting ${direction} operation`, { repo: `${this.settings.repo.owner}/${this.settings.repo.name}` });
 
 		try {
 			// Generate commit message
@@ -527,6 +548,15 @@ export default class GitHubOctokitPlugin extends Plugin {
 			// Save new sync state
 			this.syncState = newState;
 			await this.saveSyncState();
+
+			// Log result
+			this.logger.info('Sync', `Sync ${result.success ? 'completed' : 'failed'}`, {
+				filesProcessed: result.filesProcessed,
+				filesPulled: result.filesPulled,
+				filesPushed: result.filesPushed,
+				conflicts: result.conflicts.length,
+				errors: result.errors,
+			});
 
 			// Show result notification
 			if (this.settings.showNotifications) {
@@ -561,11 +591,14 @@ export default class GitHubOctokitPlugin extends Plugin {
 	 */
 	private async handleSyncError(error: unknown): Promise<void> {
 		const message = error instanceof Error ? error.message : String(error);
+		this.logger.error('Sync', 'Sync error occurred', { error: message });
 
 		// Check for common error types
 		if (message.includes('401') || message.includes('Bad credentials')) {
+			this.logger.error('Auth', 'Authentication failed');
 			new Notice('Authentication failed. Please check your GitHub token in settings.', 8000);
 		} else if (message.includes('403') || message.includes('rate limit')) {
+			this.logger.warn('API', 'Rate limit exceeded');
 			try {
 				const rateLimit = await this.githubService.getRateLimitStatus();
 				const resetTime = rateLimit.reset
@@ -576,6 +609,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 				new Notice('GitHub rate limit exceeded. Please wait before retrying.', 8000);
 			}
 		} else if (message.includes('404')) {
+			this.logger.error('API', 'Repository or branch not found');
 			new Notice('Repository or branch not found. Check your settings.', 8000);
 		} else if (message.includes('network') || message.includes('fetch')) {
 			new Notice('Network error. Check your internet connection.', 8000);
@@ -690,6 +724,81 @@ class GitHubOctokitModal extends Modal {
 
 	onClose() {
 		const {contentEl} = this;
+		contentEl.empty();
+	}
+}
+
+/**
+ * Modal for viewing logs
+ */
+class LogViewerModal extends Modal {
+	private logger: LoggerService;
+
+	constructor(app: App, logger: LoggerService) {
+		super(app);
+		this.logger = logger;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.addClass('github-octokit-log-viewer');
+
+		contentEl.createEl('h2', { text: 'Sync Logs' });
+
+		// Controls
+		const controls = contentEl.createDiv({ cls: 'log-viewer-controls' });
+
+		const levelSelect = controls.createEl('select');
+		['all', 'debug', 'info', 'warn', 'error'].forEach(level => {
+			const option = levelSelect.createEl('option', { text: level, value: level });
+			if (level === 'all') option.selected = true;
+		});
+
+		const exportBtn = controls.createEl('button', { text: 'Export' });
+		exportBtn.addEventListener('click', () => {
+			const text = this.logger.exportAsText();
+			navigator.clipboard.writeText(text);
+			new Notice('Logs copied to clipboard');
+		});
+
+		// Log entries container
+		const logsContainer = contentEl.createDiv({ cls: 'log-entries' });
+
+		const renderLogs = (filter?: string) => {
+			logsContainer.empty();
+			const entries = this.logger.getRecentEntries(100);
+			const filtered = filter && filter !== 'all'
+				? entries.filter(e => e.level === filter)
+				: entries;
+
+			if (filtered.length === 0) {
+				logsContainer.createDiv({ text: 'No log entries', cls: 'log-empty' });
+				return;
+			}
+
+			filtered.reverse().forEach(entry => {
+				const entryEl = logsContainer.createDiv({ cls: `log-entry log-${entry.level}` });
+				const time = entry.timestamp.toLocaleTimeString();
+				entryEl.createSpan({ text: `[${time}]`, cls: 'log-time' });
+				entryEl.createSpan({ text: `[${entry.level.toUpperCase()}]`, cls: 'log-level' });
+				entryEl.createSpan({ text: `[${entry.category}]`, cls: 'log-category' });
+				entryEl.createSpan({ text: entry.message, cls: 'log-message' });
+				if (entry.data) {
+					entryEl.createEl('pre', {
+						text: JSON.stringify(entry.data, null, 2),
+						cls: 'log-data'
+					});
+				}
+			});
+		};
+
+		levelSelect.addEventListener('change', () => renderLogs(levelSelect.value));
+		renderLogs();
+	}
+
+	onClose() {
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 }
@@ -935,6 +1044,80 @@ class GitHubOctokitSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.showNotifications = value;
 					await this.plugin.saveSettings();
+				}));
+
+		// Logging Section
+		containerEl.createEl('h2', { text: 'Logging' });
+
+		new Setting(containerEl)
+			.setName('Enable Logging')
+			.setDesc('Log sync operations for debugging')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.logging.enabled)
+				.onChange(async (value) => {
+					this.plugin.settings.logging.enabled = value;
+					this.plugin.logger.configure({ enabled: value });
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Log Level')
+			.setDesc('Minimum log level to record')
+			.addDropdown(dropdown => dropdown
+				.addOption('debug', 'Debug (verbose)')
+				.addOption('info', 'Info (normal)')
+				.addOption('warn', 'Warnings only')
+				.addOption('error', 'Errors only')
+				.setValue(this.plugin.settings.logging.level)
+				.onChange(async (value: LogLevel) => {
+					this.plugin.settings.logging.level = value;
+					this.plugin.logger.configure({ level: value });
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Persist Logs to File')
+			.setDesc('Save logs to a file in your vault')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.logging.persistToFile)
+				.onChange(async (value) => {
+					this.plugin.settings.logging.persistToFile = value;
+					this.plugin.logger.configure({ persistToFile: value });
+					await this.plugin.saveSettings();
+				}));
+
+		if (this.plugin.settings.logging.persistToFile) {
+			new Setting(containerEl)
+				.setName('Log File Path')
+				.setDesc('Path for the log file (relative to vault root)')
+				.addText(text => text
+					.setPlaceholder('.github-sync.log')
+					.setValue(this.plugin.settings.logging.logFilePath)
+					.onChange(async (value) => {
+						this.plugin.settings.logging.logFilePath = value || '.github-sync.log';
+						this.plugin.logger.configure({ logFilePath: value || '.github-sync.log' });
+						await this.plugin.saveSettings();
+					}));
+		}
+
+		new Setting(containerEl)
+			.setName('View Logs')
+			.setDesc('View recent log entries')
+			.addButton(button => button
+				.setButtonText('View Logs')
+				.onClick(() => {
+					new LogViewerModal(this.app, this.plugin.logger).open();
+				}));
+
+		new Setting(containerEl)
+			.setName('Clear Logs')
+			.setDesc('Clear all log entries from memory')
+			.addButton(button => button
+				.setButtonText('Clear')
+				.setWarning()
+				.onClick(() => {
+					this.plugin.logger.clear();
+					new Notice('Logs cleared');
 				}));
 	}
 
