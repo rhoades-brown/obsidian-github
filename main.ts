@@ -1,4 +1,4 @@
-import { App, Menu, Notice, Plugin, TFile } from 'obsidian';
+import { Notice, Plugin, TFile } from 'obsidian';
 import { GitHubService } from './src/services/githubService';
 import { SyncService, PersistedSyncState, SyncResult } from './src/services/syncService';
 import { LoggerService } from './src/services/loggerService';
