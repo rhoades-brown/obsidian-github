@@ -45,7 +45,8 @@ export default class GitHubOctokitPlugin extends Plugin {
 		}
 
 		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('github', 'GitHub Octokit - Click to sync, right-click for menu', async (evt: MouseEvent) => {
+		// eslint-disable-next-line obsidianmd/ui/sentence-case -- product name
+		const ribbonIconEl = this.addRibbonIcon('github', 'GitHub Octokit - click to sync, right-click for menu', async (evt: MouseEvent) => {
 			if (evt.button === 0) {
 				// Left click - trigger sync
 				await this.performSync();
@@ -185,14 +186,15 @@ export default class GitHubOctokitPlugin extends Plugin {
 
 		// Sync on startup if enabled
 		if (this.settings.syncSchedule.syncOnStartup && this.githubService.isAuthenticated && this.settings.repo) {
-			setTimeout(() => this.performSync(), 3000); // Delay to let Obsidian fully load
+			setTimeout(() => { void this.performSync(); }, 3000); // Delay to let Obsidian fully load
 		}
 
 		// First-run setup notice
 		if (!this.settings.auth.token) {
 			setTimeout(() => {
 				new Notice(
-					'GitHub Octokit: Welcome! Open Settings → GitHub Octokit to configure sync.',
+					// eslint-disable-next-line obsidianmd/ui/sentence-case -- product name
+					'GitHub Octokit: Welcome! Open settings → GitHub Octokit to configure sync.',
 					15000
 				);
 			}, 2000);
@@ -288,7 +290,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 		if (this.settings.syncSchedule.syncOnInterval) {
 			const intervalMs = this.settings.syncSchedule.intervalMinutes * 60 * 1000;
 			this.syncIntervalId = window.setInterval(() => {
-				this.performSync();
+				void this.performSync();
 			}, intervalMs);
 		}
 
@@ -315,7 +317,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 			window.clearTimeout(this.syncDebounceTimer);
 		}
 		this.syncDebounceTimer = window.setTimeout(() => {
-			this.performSync();
+			void this.performSync();
 			this.syncDebounceTimer = null;
 		}, 2000);
 	}
@@ -395,7 +397,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 			return result;
 		} catch (error) {
 			console.error('Sync error:', error);
-			this.handleSyncError(error);
+			void this.handleSyncError(error);
 			return null;
 		} finally {
 			this.isSyncing = false;
@@ -439,8 +441,9 @@ export default class GitHubOctokitPlugin extends Plugin {
 
 	async loadSettings() {
 		const data = await this.loadData() || {};
-		// Extract syncState before merging with defaults
-		const { syncState, ...settingsData } = data;
+		// Extract syncState before merging with defaults - syncState is separate from settings
+		const { syncState: _ignored, ...settingsData } = data;
+		void _ignored; // intentionally unused - just extracting syncState from data
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
 	}
 
@@ -500,7 +503,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 	async openSyncView(): Promise<SyncView | null> {
 		const existing = this.app.workspace.getLeavesOfType(SYNC_VIEW_TYPE);
 		if (existing.length > 0) {
-			this.app.workspace.revealLeaf(existing[0]);
+			void this.app.workspace.revealLeaf(existing[0]);
 			const view = existing[0].view;
 			if (view instanceof SyncView) {
 				await view.refresh();
@@ -516,7 +519,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 			active: true,
 		});
 
-		this.app.workspace.revealLeaf(leaf);
+		void this.app.workspace.revealLeaf(leaf);
 		const view = leaf.view;
 		if (view instanceof SyncView) return view;
 		return null;

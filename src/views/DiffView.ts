@@ -136,9 +136,11 @@ export class DiffView extends ItemView {
         modeBtn.addEventListener('click', () => this.toggleMode());
 
         // Navigation
-        const prevBtn = container.createEl('button', { text: '← Prev' });
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- navigation button
+        const prevBtn = container.createEl('button', { text: '← Previous' });
         prevBtn.addEventListener('click', () => this.prevChange());
 
+         
         const nextBtn = container.createEl('button', { text: 'Next →' });
         nextBtn.addEventListener('click', () => this.nextChange());
 
@@ -158,8 +160,8 @@ export class DiffView extends ItemView {
         const leftPane = container.createDiv({ cls: 'diff-pane diff-left' });
         const rightPane = container.createDiv({ cls: 'diff-pane diff-right' });
 
-        leftPane.createEl('div', { cls: 'pane-header', text: 'Remote (GitHub)' });
-        rightPane.createEl('div', { cls: 'pane-header', text: 'Local (Vault)' });
+        leftPane.createEl('div', { cls: 'pane-header', text: 'Remote (GitHub)' });   
+        rightPane.createEl('div', { cls: 'pane-header', text: 'Local (vault)' });
 
         const leftContent = leftPane.createDiv({ cls: 'pane-content' });
         const rightContent = rightPane.createDiv({ cls: 'pane-content' });

@@ -33,7 +33,7 @@ export class SyncView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'GitHub Sync';
+        return 'GitHub sync';
     }
 
     getIcon(): string {
@@ -156,7 +156,7 @@ export class SyncView extends ItemView {
         msg.createEl('p', { text: message });
 
         const btn = msg.createEl('button', { text: 'Retry' });
-        btn.addEventListener('click', () => this.refresh());
+        btn.addEventListener('click', () => { void this.refresh(); });
     }
 
     private render(): void {
@@ -174,7 +174,7 @@ export class SyncView extends ItemView {
         this.renderActions(container);
 
         // Commit history (foldable)
-        this.renderCommitHistory(container);
+        void this.renderCommitHistory(container);
 
         // Logs section (foldable, only if logging enabled)
         if (this.plugin.settings.logging.enabled) {
@@ -335,17 +335,17 @@ export class SyncView extends ItemView {
         // Sync controls
         const syncControls = actionsBar.createDiv({ cls: 'sync-controls' });
 
-        const pullBtn = syncControls.createEl('button', { text: '⬇ Pull' });
+        const pullBtn = syncControls.createEl('button', { text: '⬇ Pull' });  // eslint-disable-line obsidianmd/ui/sentence-case
         pullBtn.addEventListener('click', () => {
             void this.plugin.performSync('pull').then(() => this.refresh());
         });
 
-        const pushBtn = syncControls.createEl('button', { text: '⬆ Push' });
+        const pushBtn = syncControls.createEl('button', { text: '⬆ Push' });  // eslint-disable-line obsidianmd/ui/sentence-case
         pushBtn.addEventListener('click', () => {
             void this.plugin.performSync('push').then(() => this.refresh());
         });
 
-        const syncBtn = syncControls.createEl('button', { text: '⟳ Sync', cls: 'mod-cta' });
+        const syncBtn = syncControls.createEl('button', { text: '⟳ Sync', cls: 'mod-cta' });  // eslint-disable-line obsidianmd/ui/sentence-case
         syncBtn.addEventListener('click', () => {
             void this.plugin.performSync().then(() => this.refresh());
         });
@@ -413,7 +413,7 @@ export class SyncView extends ItemView {
                     window.open(commit.url, '_blank');
                 });
             }
-        } catch (error) {
+        } catch {
             historySection.createEl('p', {
                 text: 'Failed to load commits',
                 cls: 'history-error'
@@ -445,7 +445,7 @@ export class SyncView extends ItemView {
         copyBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const text = this.plugin.logger.exportAsText();
-            navigator.clipboard.writeText(text);
+            void navigator.clipboard.writeText(text);
             new Notice('Logs copied to clipboard');
         });
 

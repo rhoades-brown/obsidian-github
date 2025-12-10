@@ -1,4 +1,4 @@
-import { App, TFile, TFolder, Vault, TAbstractFile } from 'obsidian';
+import { App, TFile, TFolder, Vault } from 'obsidian';
 
 // ============================================================================
 // File Utilities for GitHub Octokit Plugin

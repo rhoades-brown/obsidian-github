@@ -31,7 +31,7 @@ export class LogViewerModal extends Modal {
 		const exportBtn = controls.createEl('button', { text: 'Export' });
 		exportBtn.addEventListener('click', () => {
 			const text = this.logger.exportAsText();
-			navigator.clipboard.writeText(text);
+			void navigator.clipboard.writeText(text);
 			new Notice('Logs copied to clipboard');
 		});
 

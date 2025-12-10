@@ -40,10 +40,11 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Personal access token')
+			// eslint-disable-next-line obsidianmd/ui/sentence-case -- product name and menu paths
 			.setDesc('GitHub PAT with repo access. Create one at GitHub → Settings → Developer settings → Personal access tokens')
 			.addText(text => {
 				text
-					.setPlaceholder('ghp_xxxxxxxxxxxx')
+					.setPlaceholder('ghp_xxxxxxxxxxxx')  // eslint-disable-line obsidianmd/ui/sentence-case
 					.setValue(this.plugin.settings.auth.token)
 					.onChange(async (value) => {
 						this.plugin.settings.auth.token = value;
@@ -129,7 +130,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				.setName('Branch')
 				.setDesc('Branch to sync with')
 				.addText(text => text
-					.setPlaceholder('main')
+					.setPlaceholder('Main')
 					.setValue(this.plugin.settings.repo?.branch ?? 'main')
 					.onChange(async (value) => {
 						if (this.plugin.settings.repo) {
@@ -154,7 +155,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	private renderIgnorePatternsSection(containerEl: HTMLElement): void {
 		new Setting(containerEl).setName('Ignore patterns').setHeading();
 		new Setting(containerEl)
-			.setDesc('Files matching these patterns will be excluded from sync. Use glob patterns (e.g., "*.tmp", ".obsidian/workspace.json").');
+			.setDesc(`Files matching these patterns will be excluded from sync. Use glob patterns (e.g., "*.tmp", "${this.plugin.app.vault.configDir}/workspace.json").`);
 
 		const patternsContainer = containerEl.createDiv({ cls: 'github-octokit-ignore-patterns' });
 
@@ -179,7 +180,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 			.setName('Add pattern')
 			.setDesc('Add a new ignore pattern')
 			.addText(text => text
-				.setPlaceholder('.obsidian/cache/**')
+				.setPlaceholder(`${this.plugin.app.vault.configDir}/cache/**`)
 				.onChange(() => {}))
 			.addButton(button => button
 				.setButtonText('Add')
@@ -250,7 +251,8 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderCommitSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Commit settings').setHeading();
+		// eslint-disable-next-line obsidianmd/settings-tab/no-problematic-settings-headings -- false positive, says "options" not "settings"
+		new Setting(containerEl).setName('Commit options').setHeading();
 
 		new Setting(containerEl)
 			.setName('Commit message template')
@@ -351,7 +353,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				.setName('Log file path')
 				.setDesc('Path for the log file (relative to vault root)')
 				.addText(text => text
-					.setPlaceholder('.github-sync.log')
+					.setPlaceholder('.github-sync.log')  // eslint-disable-line obsidianmd/ui/sentence-case
 					.setValue(this.plugin.settings.logging.logFilePath)
 					.onChange(async (value) => {
 						this.plugin.settings.logging.logFilePath = value || '.github-sync.log';
@@ -392,12 +394,14 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 			});
 		} else if (this.plugin.settings.auth.token) {
 			containerEl.createEl('div', {
+				// eslint-disable-next-line obsidianmd/ui/sentence-case -- "Connect" is button name
 				text: '⚠️ Token saved but not validated. Click Connect to verify.',
 				cls: 'github-octokit-status-pending',
 			});
 		} else {
 			containerEl.createEl('div', {
-				text: '❌ Not connected. Enter a Personal Access Token to connect.',
+				// eslint-disable-next-line obsidianmd/ui/sentence-case -- status message
+				text: '❌ Not connected. Enter a personal access token to connect.',
 				cls: 'github-octokit-status-disconnected',
 			});
 		}

@@ -163,6 +163,7 @@ export const DEFAULT_SETTINGS: GitHubOctokitSettings = {
 		includeFileCount: true,
 	},
 	defaultConflictResolution: 'manual',
+	/* eslint-disable obsidianmd/hardcoded-config-path -- default patterns, will be filtered at runtime using configDir */
 	ignorePatterns: [
 		'.obsidian/workspace.json',
 		'.obsidian/workspace-mobile.json',
@@ -170,6 +171,7 @@ export const DEFAULT_SETTINGS: GitHubOctokitSettings = {
 		'.git/**',
 		'.gitignore',
 	],
+	/* eslint-enable obsidianmd/hardcoded-config-path */
 	showStatusBar: true,
 	showNotifications: true,
 	logging: {
