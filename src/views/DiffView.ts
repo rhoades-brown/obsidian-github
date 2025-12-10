@@ -39,10 +39,12 @@ export class DiffView extends ItemView {
 
     async onOpen(): Promise<void> {
         this.render();
+        await Promise.resolve();
     }
 
     async onClose(): Promise<void> {
         // Cleanup
+        await Promise.resolve();
     }
 
     /**
@@ -134,9 +136,11 @@ export class DiffView extends ItemView {
         modeBtn.addEventListener('click', () => this.toggleMode());
 
         // Navigation
-        const prevBtn = container.createEl('button', { text: '← Prev' });
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- navigation button
+        const prevBtn = container.createEl('button', { text: '← Previous' });
         prevBtn.addEventListener('click', () => this.prevChange());
 
+         
         const nextBtn = container.createEl('button', { text: 'Next →' });
         nextBtn.addEventListener('click', () => this.nextChange());
 
@@ -156,8 +160,8 @@ export class DiffView extends ItemView {
         const leftPane = container.createDiv({ cls: 'diff-pane diff-left' });
         const rightPane = container.createDiv({ cls: 'diff-pane diff-right' });
 
-        leftPane.createEl('div', { cls: 'pane-header', text: 'Remote (GitHub)' });
-        rightPane.createEl('div', { cls: 'pane-header', text: 'Local (Vault)' });
+        leftPane.createEl('div', { cls: 'pane-header', text: 'Remote (GitHub)' });   
+        rightPane.createEl('div', { cls: 'pane-header', text: 'Local (vault)' });
 
         const leftContent = leftPane.createDiv({ cls: 'pane-content' });
         const rightContent = rightPane.createDiv({ cls: 'pane-content' });
@@ -232,17 +236,17 @@ export class DiffView extends ItemView {
     }
 
     private renderActions(container: HTMLElement): void {
-        const acceptLocalBtn = container.createEl('button', { text: 'Keep Local', cls: 'mod-cta' });
+        const acceptLocalBtn = container.createEl('button', { text: 'Keep local', cls: 'mod-cta' });
         acceptLocalBtn.addEventListener('click', () => {
             if (this.onAcceptLocal) this.onAcceptLocal();
         });
 
-        const acceptRemoteBtn = container.createEl('button', { text: 'Keep Remote' });
+        const acceptRemoteBtn = container.createEl('button', { text: 'Keep remote' });
         acceptRemoteBtn.addEventListener('click', () => {
             if (this.onAcceptRemote) this.onAcceptRemote();
         });
 
-        const acceptBothBtn = container.createEl('button', { text: 'Keep Both' });
+        const acceptBothBtn = container.createEl('button', { text: 'Keep both' });
         acceptBothBtn.addEventListener('click', () => {
             if (this.onAcceptBoth) this.onAcceptBoth();
         });

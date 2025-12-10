@@ -17,7 +17,7 @@ export class LogViewerModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass('github-octokit-log-viewer');
 
-		contentEl.createEl('h2', { text: 'Sync Logs' });
+		this.titleEl.setText('Sync logs');
 
 		// Controls
 		const controls = contentEl.createDiv({ cls: 'log-viewer-controls' });
@@ -31,7 +31,7 @@ export class LogViewerModal extends Modal {
 		const exportBtn = controls.createEl('button', { text: 'Export' });
 		exportBtn.addEventListener('click', () => {
 			const text = this.logger.exportAsText();
-			navigator.clipboard.writeText(text);
+			void navigator.clipboard.writeText(text);
 			new Notice('Logs copied to clipboard');
 		});
 

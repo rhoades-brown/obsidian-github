@@ -107,7 +107,8 @@ export class LoggerService {
                 console.debug(logMessage, data ?? '');
                 break;
             case 'info':
-                console.info(logMessage, data ?? '');
+                // Use debug for info since console.log is not allowed
+                console.debug(logMessage, data ?? '');
                 break;
             case 'warn':
                 console.warn(logMessage, data ?? '');
@@ -149,19 +150,19 @@ export class LoggerService {
 
     // Convenience methods for each log level
     debug(category: string, message: string, data?: unknown): void {
-        this.addEntry('debug', category, message, data);
+        void this.addEntry('debug', category, message, data);
     }
 
     info(category: string, message: string, data?: unknown): void {
-        this.addEntry('info', category, message, data);
+        void this.addEntry('info', category, message, data);
     }
 
     warn(category: string, message: string, data?: unknown): void {
-        this.addEntry('warn', category, message, data);
+        void this.addEntry('warn', category, message, data);
     }
 
     error(category: string, message: string, data?: unknown): void {
-        this.addEntry('error', category, message, data);
+        void this.addEntry('error', category, message, data);
     }
 
     /**

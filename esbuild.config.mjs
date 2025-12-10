@@ -1,6 +1,9 @@
 import esbuild from "esbuild";
 import process from "process";
-import builtins from "builtin-modules";
+import module from "module";
+
+// Get Node.js built-in modules using native API (replaces builtin-modules package)
+const builtins = module.builtinModules.filter(m => !m.startsWith("_"));
 
 const banner =
 `/*

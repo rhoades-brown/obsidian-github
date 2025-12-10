@@ -1,4 +1,4 @@
-import { TFile, TFolder, Vault, TAbstractFile } from 'obsidian';
+import { App, TFile, TFolder, Vault } from 'obsidian';
 
 // ============================================================================
 // File Utilities for GitHub Octokit Plugin
@@ -218,12 +218,12 @@ export async function ensureParentFolders(vault: Vault, path: string): Promise<v
 }
 
 /**
- * Delete a file from the vault
+ * Delete a file from the vault (using trash to respect user preferences)
  */
-export async function deleteFile(vault: Vault, path: string): Promise<boolean> {
-    const file = vault.getAbstractFileByPath(path);
+export async function deleteFile(app: App, path: string): Promise<boolean> {
+    const file = app.vault.getAbstractFileByPath(path);
     if (file) {
-        await vault.delete(file);
+        await app.fileManager.trashFile(file);
         return true;
     }
     return false;
