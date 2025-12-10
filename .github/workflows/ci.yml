@@ -47,7 +47,6 @@ jobs:
 
       # Release step - only runs on push to main/master (not PRs)
       - name: Get version from manifest
-        if: github.event_name == 'push'
         id: version
         run: |
           VERSION=$(node -p "require('./manifest.json').version")
