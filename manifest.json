@@ -1,11 +1,10 @@
 {
 	"id": "github-octokit",
-	"name": "GitHub Octokit",
+	"name": "GitHub Octokit Sync",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
 	"description": "Sync your Obsidian vault with GitHub using the Octokit API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"author": "M Rhoades-Brown",
+	"authorUrl": "https://github.com/rhoades-brown",
 	"isDesktopOnly": false
 }
