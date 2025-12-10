@@ -14,6 +14,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,3 +45,52 @@ jobs:
             manifest.json
             styles.css
 
+      # Release step - only runs on push to main/master (not PRs)
+      - name: Get version from manifest
+        id: version
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Check if release exists
+        if: github.event_name == 'push'
+        id: check_release
+        run: |
+          if gh release view "${{ steps.version.outputs.version }}" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.version.outputs.version }} already exists, skipping..."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.version.outputs.version }} does not exist, will create..."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create Release
+        if: github.event_name == 'push' && steps.check_release.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          files: |
+            main.js
+            manifest.json
+            styles.css
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      - name: Create Pre-Release
+        if: github.event_name != 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}-${{ github.run_number }}
+          name: ${{ steps.version.outputs.version }}-${{ github.run_number }}
+          files: |
+            main.js
+            manifest.json
+            styles.css
+          generate_release_notes: true
+          draft: false
+          prerelease: true

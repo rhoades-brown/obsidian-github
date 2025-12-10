@@ -4,7 +4,7 @@
 
 Sync your Obsidian Vault with a GitHub repository using the official GitHub API (Octokit).
 
-This plugin provides a simple and efficient way to sync your Obsidian vault with a GitHub repository without external dependencies like Git. Use GitHub as a remote backup and collaboration tool for your Obsidian vault on any device.
+This plugin provides a simple and efficient way to sync your Obsidian vault with a GitHub repository without external dependencies like Git CLI. Use GitHub as a remote backup and collaboration tool for your Obsidian vault on any device.
 
 ## Features
 
@@ -19,13 +19,29 @@ This plugin provides a simple and efficient way to sync your Obsidian vault with
 - **Sync logging**: Debug sync operations with configurable logging
 - **File status indicators**: See at a glance which files are added, modified, or deleted
 
+## Prerequisites
+
+- Obsidian
+- A GitHub account
+
 ## Installation
+
+> **Note**: Please make a backup copy of your vault before installing this plugin. This plugin is still in early development and there may be bugs.
 
 ### From Obsidian Community Plugins (Coming Soon)
 
 1. Open Settings → Community Plugins
 2. Search for "GitHub Octokit"
 3. Click Install, then Enable
+
+### BETA (BRAT) Installation
+
+1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat)
+2. Open Settings → Community Plugins → BRAT
+3. Click "Add beta plugin"
+4. Enter this repository `rhoades-brown\obsidian-github`.
+5. Choose 'latest' as the version.
+6. Click "Add Plugin"
 
 ### Manual Installation
 
@@ -73,11 +89,13 @@ This plugin provides a simple and efficient way to sync your Obsidian vault with
 ### Sync Panel
 
 Open the sync panel via:
+
 - Command: "GitHub Octokit: Open sync panel"
 - Right-click the ribbon icon → "Open Sync Panel"
 - Click the status bar indicator
 
 The sync panel shows:
+
 - Files with changes (grouped by status)
 - Conflict resolution options
 - Recent commit history
@@ -115,6 +133,7 @@ When a file has been modified both locally and on GitHub:
 ## Ignore Patterns
 
 By default, the following are excluded from sync:
+
 - `.obsidian/workspace.json`
 - `.obsidian/workspace-mobile.json`
 - `.obsidian/github-sync-metadata.json`
@@ -122,6 +141,7 @@ By default, the following are excluded from sync:
 - `.gitignore`
 
 Add custom patterns in Settings → GitHub Octokit → Ignore Patterns:
+
 - `*.log` - All log files
 - `private/**` - Everything in the private folder
 - `*.tmp` - All .tmp files
@@ -147,7 +167,7 @@ npm run dev
 
 ### Project Structure
 
-```
+```text
 obsidian-github/
 ├── main.ts              # Plugin entry point
 ├── src/
@@ -161,25 +181,30 @@ obsidian-github/
 ## Troubleshooting
 
 ### "Authentication failed"
+
 - Verify your token has the `repo` scope
 - Check if the token has expired
 - Try generating a new token
 
 ### "Rate limit exceeded"
+
 - GitHub limits API requests (5000/hour for authenticated users)
 - Wait for the reset time shown in the notification
 - Reduce sync frequency in settings
 
 ### "Conflict detected"
+
 - Open the sync panel to view and resolve conflicts
 - Use the diff view to compare versions
 
 ### Files keep re-syncing
+
 - Check if sync state is being preserved (enable logging to debug)
 - Verify line endings are consistent (plugin normalizes to LF)
 - Ensure ignore patterns are correctly configured
 
 ### Debug with Logs
+
 1. Enable logging in Settings → GitHub Octokit → Logging
 2. Set log level to "Debug" for verbose output
 3. Open the debug console (macOS → cmd+option+i; Windows → ctrl+shift+i) to see real-time logs
