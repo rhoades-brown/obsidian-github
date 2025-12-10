@@ -613,8 +613,14 @@ export class SyncService {
             // Pull: remote-only files (added on remote), or files where remote has changes
             const remote = remoteIndex.get(c.path);
             const local = localIndex.get(c.path);
-            if (!remote && local) return false; // Local-only file, should push not pull
-            if (remote && !local) return true;  // Remote-only file (new from remote)
+            if (!remote && local) {
+                // File exists only locally - pull deletion if it was deleted on remote
+                return c.status === 'deleted';
+            }
+            if (remote && !local) {
+                // File exists only on remote - pull if it's new, not if it's a local deletion
+                return c.status !== 'deleted';
+            }
             // Both exist and content differs - check who changed
             const lastSha = lastSyncState?.fileShas[c.path];
             const lastHash = lastSyncState?.fileHashes[c.path];
@@ -629,8 +635,14 @@ export class SyncService {
             // Push: local-only files (added locally), or files where local has changes
             const remote = remoteIndex.get(c.path);
             const local = localIndex.get(c.path);
-            if (!local && remote) return false; // Remote-only file, should pull not push
-            if (local && !remote) return true;  // Local-only file (new locally)
+            if (!local && remote) {
+                // File exists only on remote - push deletion if it was deleted locally
+                return c.status === 'deleted';
+            }
+            if (local && !remote) {
+                // File exists only locally - push if it's new, not if it's a remote deletion
+                return c.status !== 'deleted';
+            }
             // Both exist and content differs - check who changed
             const lastSha = lastSyncState?.fileShas[c.path];
             const lastHash = lastSyncState?.fileHashes[c.path];

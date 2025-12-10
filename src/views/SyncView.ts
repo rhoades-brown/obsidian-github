@@ -490,7 +490,7 @@ export class SyncView extends ItemView {
         this.logUnsubscribe = this.plugin.logger.onEntry((entry: LogEntry) => {
             const currentFilter = levelSelect.value;
             if (currentFilter === 'all' || entry.level === currentFilter) {
-                this.appendLogEntry(logsContainer, entry);
+                this.appendLogEntry(logsContainer, entry, true); // prepend to show newest first
             }
         });
     }
@@ -508,13 +508,19 @@ export class SyncView extends ItemView {
             return;
         }
 
-        // Show newest first
+        // Show newest first - reverse and append (not prepend)
         [...filtered].reverse().forEach(entry => {
-            this.appendLogEntry(container, entry, true);
+            this.appendLogEntry(container, entry, false);
         });
     }
 
     private appendLogEntry(container: HTMLElement, entry: LogEntry, prepend = false): void {
+        // Remove "No log entries" placeholder if present
+        const emptyPlaceholder = container.querySelector('.logs-empty');
+        if (emptyPlaceholder) {
+            emptyPlaceholder.remove();
+        }
+
         const entryEl = createDiv({ cls: `log-entry log-${entry.level}` });
 
         const time = entry.timestamp.toLocaleTimeString();
@@ -528,13 +534,18 @@ export class SyncView extends ItemView {
             dataEl.textContent = JSON.stringify(entry.data, null, 2);
         }
 
-        if (prepend && container.firstChild) {
-            container.insertBefore(entryEl, container.firstChild);
+        if (prepend) {
+            // Always prepend new entries at the top (newest first)
+            if (container.firstChild) {
+                container.insertBefore(entryEl, container.firstChild);
+            } else {
+                container.appendChild(entryEl);
+            }
         } else {
             container.appendChild(entryEl);
         }
 
-        // Limit entries displayed
+        // Limit entries displayed - remove from bottom (oldest) when prepending
         while (container.children.length > 50) {
             container.lastChild?.remove();
         }
