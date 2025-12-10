@@ -39,10 +39,12 @@ export class DiffView extends ItemView {
 
     async onOpen(): Promise<void> {
         this.render();
+        await Promise.resolve();
     }
 
     async onClose(): Promise<void> {
         // Cleanup
+        await Promise.resolve();
     }
 
     /**
@@ -232,17 +234,17 @@ export class DiffView extends ItemView {
     }
 
     private renderActions(container: HTMLElement): void {
-        const acceptLocalBtn = container.createEl('button', { text: 'Keep Local', cls: 'mod-cta' });
+        const acceptLocalBtn = container.createEl('button', { text: 'Keep local', cls: 'mod-cta' });
         acceptLocalBtn.addEventListener('click', () => {
             if (this.onAcceptLocal) this.onAcceptLocal();
         });
 
-        const acceptRemoteBtn = container.createEl('button', { text: 'Keep Remote' });
+        const acceptRemoteBtn = container.createEl('button', { text: 'Keep remote' });
         acceptRemoteBtn.addEventListener('click', () => {
             if (this.onAcceptRemote) this.onAcceptRemote();
         });
 
-        const acceptBothBtn = container.createEl('button', { text: 'Keep Both' });
+        const acceptBothBtn = container.createEl('button', { text: 'Keep both' });
         acceptBothBtn.addEventListener('click', () => {
             if (this.onAcceptBoth) this.onAcceptBoth();
         });

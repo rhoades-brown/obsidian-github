@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFile } from 'obsidian';
+import { Menu, MenuItem, Notice, Plugin, TFile } from 'obsidian';
 import { GitHubService } from './src/services/githubService';
 import { SyncService, PersistedSyncState, SyncResult } from './src/services/syncService';
 import { LoggerService } from './src/services/loggerService';
@@ -56,40 +56,39 @@ export default class GitHubOctokitPlugin extends Plugin {
 		// Right-click context menu
 		ribbonIconEl.addEventListener('contextmenu', (evt: MouseEvent) => {
 			evt.preventDefault();
-			const menu = new (require('obsidian').Menu)();
+			const menu = new Menu();
 
-			menu.addItem((item: any) => {
-				item.setTitle('⟳ Sync Now')
+			menu.addItem((item: MenuItem) => {
+				item.setTitle('Sync now')
 					.setIcon('refresh-cw')
-					.onClick(() => this.performSync());
+					.onClick(() => { void this.performSync(); });
 			});
 
-			menu.addItem((item: any) => {
-				item.setTitle('⬇ Pull from GitHub')
+			menu.addItem((item: MenuItem) => {
+				item.setTitle('Pull from GitHub')
 					.setIcon('download')
-					.onClick(() => this.performSync('pull'));
+					.onClick(() => { void this.performSync('pull'); });
 			});
 
-			menu.addItem((item: any) => {
-				item.setTitle('⬆ Push to GitHub')
+			menu.addItem((item: MenuItem) => {
+				item.setTitle('Push to GitHub')
 					.setIcon('upload')
-					.onClick(() => this.performSync('push'));
+					.onClick(() => { void this.performSync('push'); });
 			});
 
 			menu.addSeparator();
 
-			menu.addItem((item: any) => {
-				item.setTitle('Open Sync Panel')
+			menu.addItem((item: MenuItem) => {
+				item.setTitle('Open sync panel')
 					.setIcon('layout-sidebar-right')
-					.onClick(() => this.openSyncView());
+					.onClick(() => { void this.openSyncView(); });
 			});
 
-			menu.addItem((item: any) => {
+			menu.addItem((item: MenuItem) => {
 				item.setTitle('Settings')
 					.setIcon('settings')
 					.onClick(() => {
-						(this.app as any).setting.open();
-						(this.app as any).setting.openTabById('github-octokit');
+						this.openSettings();
 					});
 			});
 
@@ -174,8 +173,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 			id: 'open-settings',
 			name: 'Open GitHub settings',
 			callback: () => {
-				(this.app as any).setting.open();
-				(this.app as any).setting.openTabById('github-octokit');
+				this.openSettings();
 			}
 		});
 
@@ -267,12 +265,11 @@ export default class GitHubOctokitPlugin extends Plugin {
 		if (!this.statusBarItem) return;
 
 		this.statusBarItem.addClass('mod-clickable');
-		this.statusBarItem.addEventListener('click', async () => {
+		this.statusBarItem.addEventListener('click', () => {
 			if (this.githubService.isAuthenticated) {
-				await this.openSyncView();
+				void this.openSyncView();
 			} else {
-				(this.app as any).setting.open();
-				(this.app as any).setting.openTabById('github-octokit');
+				this.openSettings();
 			}
 		});
 	}
@@ -535,5 +532,14 @@ export default class GitHubOctokitPlugin extends Plugin {
 			if (view instanceof SyncView) return view;
 		}
 		return null;
+	}
+
+	/**
+	 * Open the plugin settings tab
+	 */
+	openSettings(): void {
+		const setting = (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting;
+		setting.open();
+		setting.openTabById('github-octokit');
 	}
 }

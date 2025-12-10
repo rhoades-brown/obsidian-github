@@ -17,7 +17,7 @@ export class LogViewerModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass('github-octokit-log-viewer');
 
-		contentEl.createEl('h2', { text: 'Sync Logs' });
+		this.titleEl.setText('Sync logs');
 
 		// Controls
 		const controls = contentEl.createDiv({ cls: 'log-viewer-controls' });

@@ -32,14 +32,14 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderAuthSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'GitHub Authentication' });
+		new Setting(containerEl).setName('GitHub authentication').setHeading();
 
 		// Connection status
 		const statusEl = containerEl.createDiv({ cls: 'github-octokit-status' });
 		this.updateConnectionStatus(statusEl);
 
 		new Setting(containerEl)
-			.setName('Personal Access Token')
+			.setName('Personal access token')
 			.setDesc('GitHub PAT with repo access. Create one at GitHub → Settings → Developer settings → Personal access tokens')
 			.addText(text => {
 				text
@@ -73,7 +73,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderRepoSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Repository' });
+		new Setting(containerEl).setName('Repository').setHeading();
 
 		const repoSetting = new Setting(containerEl)
 			.setName('Repository')
@@ -140,7 +140,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 		}
 
 		new Setting(containerEl)
-			.setName('Subfolder Path')
+			.setName('Subfolder path')
 			.setDesc('Optional: Sync vault to a subfolder in the repo (e.g., "notes/obsidian")')
 			.addText(text => text
 				.setPlaceholder('/')
@@ -152,11 +152,9 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderIgnorePatternsSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Ignore Patterns' });
-		containerEl.createEl('p', {
-			text: 'Files matching these patterns will be excluded from sync. Use glob patterns (e.g., "*.tmp", ".obsidian/workspace.json").',
-			cls: 'setting-item-description'
-		});
+		new Setting(containerEl).setName('Ignore patterns').setHeading();
+		new Setting(containerEl)
+			.setDesc('Files matching these patterns will be excluded from sync. Use glob patterns (e.g., "*.tmp", ".obsidian/workspace.json").');
 
 		const patternsContainer = containerEl.createDiv({ cls: 'github-octokit-ignore-patterns' });
 
@@ -178,7 +176,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 		});
 
 		new Setting(containerEl)
-			.setName('Add Pattern')
+			.setName('Add pattern')
 			.setDesc('Add a new ignore pattern')
 			.addText(text => text
 				.setPlaceholder('.obsidian/cache/**')
@@ -201,11 +199,9 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderSyncTriggersSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Sync Triggers' });
-		containerEl.createEl('p', {
-			text: 'Choose when the plugin should automatically sync with GitHub. Enable multiple triggers as needed.',
-			cls: 'setting-item-description'
-		});
+		new Setting(containerEl).setName('Sync triggers').setHeading();
+		new Setting(containerEl)
+			.setDesc('Choose when the plugin should automatically sync with GitHub. Enable multiple triggers as needed.');
 
 		new Setting(containerEl)
 			.setName('Sync on file save')
@@ -254,10 +250,10 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderCommitSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Commit Settings' });
+		new Setting(containerEl).setName('Commit settings').setHeading();
 
 		new Setting(containerEl)
-			.setName('Commit Message Template')
+			.setName('Commit message template')
 			.setDesc('Template for commit messages. Use {date}, {files}, {action}')
 			.addText(text => text
 				.setPlaceholder('Vault sync: {date}')
@@ -269,10 +265,10 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderConflictSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Conflict Resolution' });
+		new Setting(containerEl).setName('Conflict resolution').setHeading();
 
 		new Setting(containerEl)
-			.setName('Default Resolution')
+			.setName('Default resolution')
 			.setDesc('How to handle conflicts when the same file is changed locally and remotely')
 			.addDropdown(dropdown => dropdown
 				.addOption('manual', 'Ask me each time')
@@ -287,10 +283,10 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderUISection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'UI Preferences' });
+		new Setting(containerEl).setName('UI preferences').setHeading();
 
 		new Setting(containerEl)
-			.setName('Show Status Bar')
+			.setName('Show status bar')
 			.setDesc('Show sync status in the status bar')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.showStatusBar)
@@ -300,7 +296,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Show Notifications')
+			.setName('Show notifications')
 			.setDesc('Show notifications for sync events')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.showNotifications)
@@ -311,10 +307,10 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderLoggingSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Logging' });
+		new Setting(containerEl).setName('Logging').setHeading();
 
 		new Setting(containerEl)
-			.setName('Enable Logging')
+			.setName('Enable logging')
 			.setDesc('Log sync operations for debugging')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.logging.enabled)
@@ -325,7 +321,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Log Level')
+			.setName('Log level')
 			.setDesc('Minimum log level to record')
 			.addDropdown(dropdown => dropdown
 				.addOption('debug', 'Debug (verbose)')
@@ -340,7 +336,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Persist Logs to File')
+			.setName('Persist logs to file')
 			.setDesc('Save logs to a file in your vault')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.logging.persistToFile)
@@ -352,7 +348,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 
 		if (this.plugin.settings.logging.persistToFile) {
 			new Setting(containerEl)
-				.setName('Log File Path')
+				.setName('Log file path')
 				.setDesc('Path for the log file (relative to vault root)')
 				.addText(text => text
 					.setPlaceholder('.github-sync.log')
@@ -365,16 +361,16 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 		}
 
 		new Setting(containerEl)
-			.setName('View Logs')
+			.setName('View logs')
 			.setDesc('View recent log entries')
 			.addButton(button => button
-				.setButtonText('View Logs')
+				.setButtonText('View logs')
 				.onClick(() => {
 					new LogViewerModal(this.app, this.plugin.logger).open();
 				}));
 
 		new Setting(containerEl)
-			.setName('Clear Logs')
+			.setName('Clear logs')
 			.setDesc('Clear all log entries from memory')
 			.addButton(button => button
 				.setButtonText('Clear')

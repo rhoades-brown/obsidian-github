@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
 import type GitHubOctokitPlugin from '../../main';
 import { FileSyncState } from '../services/syncService';
 import { LogEntry } from '../services/loggerService';
@@ -50,6 +50,7 @@ export class SyncView extends ItemView {
             this.logUnsubscribe();
             this.logUnsubscribe = null;
         }
+        await Promise.resolve();
     }
 
     /**
@@ -136,13 +137,12 @@ export class SyncView extends ItemView {
         container.addClass('github-octokit-sync-view');
 
         const msg = container.createDiv({ cls: 'sync-message' });
-        msg.createEl('h3', { text: 'Not Connected' });
+        msg.createEl('h3', { text: 'Not connected' });
         msg.createEl('p', { text: 'Please configure your GitHub connection in settings.' });
 
-        const btn = msg.createEl('button', { text: 'Open Settings', cls: 'mod-cta' });
+        const btn = msg.createEl('button', { text: 'Open settings', cls: 'mod-cta' });
         btn.addEventListener('click', () => {
-            (this.app as any).setting.open();
-            (this.app as any).setting.openTabById('github-octokit');
+            this.plugin.openSettings();
         });
     }
 
@@ -186,7 +186,7 @@ export class SyncView extends ItemView {
         const header = container.createDiv({ cls: 'sync-header' });
 
         const title = header.createDiv({ cls: 'sync-title' });
-        title.createEl('h3', { text: 'GitHub Sync' });
+        title.createEl('h3', { text: 'GitHub sync' });
 
         if (this.plugin.settings.repo) {
             title.createSpan({
@@ -195,10 +195,9 @@ export class SyncView extends ItemView {
             });
         }
 
-        const refreshBtn = header.createEl('button', { cls: 'sync-refresh-btn' });
-        refreshBtn.innerHTML = '↻';
+        const refreshBtn = header.createEl('button', { cls: 'sync-refresh-btn', text: '↻' });
         refreshBtn.title = 'Refresh';
-        refreshBtn.addEventListener('click', () => this.refresh());
+        refreshBtn.addEventListener('click', () => { void this.refresh(); });
 
         // Stats
         const stats = header.createDiv({ cls: 'sync-stats' });
@@ -276,8 +275,8 @@ export class SyncView extends ItemView {
 
             // View diff button
             const diffBtn = actions.createEl('button', { text: 'Diff', cls: 'file-action' });
-            diffBtn.addEventListener('click', async () => {
-                await this.openFileDiff(file.path);
+            diffBtn.addEventListener('click', () => {
+                void this.openFileDiff(file.path);
             });
 
             // Open in GitHub
@@ -296,8 +295,8 @@ export class SyncView extends ItemView {
             // Get local content
             const file = this.app.vault.getAbstractFileByPath(path);
             let localContent = '';
-            if (file && 'extension' in file) {
-                localContent = await this.app.vault.read(file as any);
+            if (file instanceof TFile) {
+                localContent = await this.app.vault.read(file);
             }
 
             // Get remote content
@@ -327,31 +326,28 @@ export class SyncView extends ItemView {
         // Stage controls
         const stageControls = actionsBar.createDiv({ cls: 'stage-controls' });
 
-        const stageAllBtn = stageControls.createEl('button', { text: 'Stage All' });
-        stageAllBtn.addEventListener('click', () => this.stageAll());
+        const stageAllBtn = stageControls.createEl('button', { text: 'Stage all' });
+        stageAllBtn.addEventListener('click', () => { this.stageAll(); });
 
-        const unstageAllBtn = stageControls.createEl('button', { text: 'Unstage All' });
-        unstageAllBtn.addEventListener('click', () => this.unstageAll());
+        const unstageAllBtn = stageControls.createEl('button', { text: 'Unstage all' });
+        unstageAllBtn.addEventListener('click', () => { this.unstageAll(); });
 
         // Sync controls
         const syncControls = actionsBar.createDiv({ cls: 'sync-controls' });
 
         const pullBtn = syncControls.createEl('button', { text: '⬇ Pull' });
-        pullBtn.addEventListener('click', async () => {
-            await this.plugin.performSync('pull');
-            await this.refresh();
+        pullBtn.addEventListener('click', () => {
+            void this.plugin.performSync('pull').then(() => this.refresh());
         });
 
         const pushBtn = syncControls.createEl('button', { text: '⬆ Push' });
-        pushBtn.addEventListener('click', async () => {
-            await this.plugin.performSync('push');
-            await this.refresh();
+        pushBtn.addEventListener('click', () => {
+            void this.plugin.performSync('push').then(() => this.refresh());
         });
 
         const syncBtn = syncControls.createEl('button', { text: '⟳ Sync', cls: 'mod-cta' });
-        syncBtn.addEventListener('click', async () => {
-            await this.plugin.performSync();
-            await this.refresh();
+        syncBtn.addEventListener('click', () => {
+            void this.plugin.performSync().then(() => this.refresh());
         });
 
         // Staged count
@@ -370,11 +366,11 @@ export class SyncView extends ItemView {
         const header = historySection.createDiv({ cls: 'history-header foldable-header' });
         const chevron = header.createSpan({ cls: `fold-chevron ${this.commitsExpanded ? 'expanded' : ''}` });
         chevron.textContent = '▶';
-        header.createEl('h4', { text: 'Commit History' });
+        header.createEl('h4', { text: 'Commit history' });
 
         header.addEventListener('click', () => {
             this.commitsExpanded = !this.commitsExpanded;
-            this.render();
+            void this.render();
         });
 
         if (!this.commitsExpanded) {
@@ -432,13 +428,13 @@ export class SyncView extends ItemView {
         const header = logsSection.createDiv({ cls: 'logs-header foldable-header' });
         const chevron = header.createSpan({ cls: `fold-chevron ${this.logsExpanded ? 'expanded' : ''}` });
         chevron.textContent = '▶';
-        header.createEl('h4', { text: 'Sync Logs' });
+        header.createEl('h4', { text: 'Sync logs' });
 
         header.addEventListener('click', (e) => {
             // Don't toggle if clicking on controls
             if ((e.target as HTMLElement).closest('.logs-controls')) return;
             this.logsExpanded = !this.logsExpanded;
-            this.render();
+            void this.render();
         });
 
         // Controls (always visible in header)
