@@ -92,26 +92,60 @@ export class SyncService {
     private githubService: GitHubService;
     private ignorePatterns: string[];
     private subfolderPath: string;
+    private syncConfiguration: boolean;
 
     constructor(
         app: App,
         githubService: GitHubService,
         ignorePatterns: string[] = [],
-        subfolderPath: string = ''
+        subfolderPath: string = '',
+        syncConfiguration: boolean = false
     ) {
         this.app = app;
         this.vault = app.vault;
         this.githubService = githubService;
         this.ignorePatterns = ignorePatterns;
         this.subfolderPath = subfolderPath;
+        this.syncConfiguration = syncConfiguration;
     }
 
     /**
      * Update configuration
      */
-    configure(ignorePatterns: string[], subfolderPath: string): void {
+    configure(ignorePatterns: string[], subfolderPath: string, syncConfiguration: boolean = false): void {
         this.ignorePatterns = ignorePatterns;
         this.subfolderPath = subfolderPath;
+        this.syncConfiguration = syncConfiguration;
+    }
+
+    /**
+     * Get effective ignore patterns (including config folder if not syncing configuration)
+     */
+    private getEffectiveIgnorePatterns(): string[] {
+        const configDir = this.app.vault.configDir;
+        const patterns = [...this.ignorePatterns];
+
+        // Always exclude the sync metadata file - it contains local state
+        const metadataPattern = `${configDir}/github-sync-metadata.json`;
+        if (!patterns.includes(metadataPattern)) {
+            patterns.push(metadataPattern);
+        }
+
+        // Always exclude the plugins folder - plugins are managed separately
+        const pluginsPattern = `${configDir}/plugins/**`;
+        if (!patterns.includes(pluginsPattern)) {
+            patterns.push(pluginsPattern);
+        }
+
+        // Add entire config folder to ignore patterns if not syncing configuration
+        if (!this.syncConfiguration) {
+            const configPattern = `${configDir}/**`;
+            if (!patterns.includes(configPattern)) {
+                patterns.push(configPattern);
+            }
+        }
+
+        return patterns;
     }
 
     // ========================================================================
@@ -155,14 +189,81 @@ export class SyncService {
             });
         }
 
+        // If syncing configuration, also include files from the config folder
+        // (vault.getFiles() doesn't include config folder files)
+        if (this.syncConfiguration) {
+            await this.indexConfigFolder(index);
+        }
+
         return index;
+    }
+
+    /**
+     * Index files in the config folder using the adapter API
+     */
+    private async indexConfigFolder(index: Map<string, LocalFileEntry>): Promise<void> {
+        const configDir = this.app.vault.configDir;
+        await this.indexFolderRecursive(configDir, index);
+    }
+
+    /**
+     * Recursively index files in a folder using the adapter API
+     */
+    private async indexFolderRecursive(folderPath: string, index: Map<string, LocalFileEntry>): Promise<void> {
+        try {
+            const listing = await this.vault.adapter.list(folderPath);
+
+            // Process files
+            for (const filePath of listing.files) {
+                if (this.shouldIgnore(filePath)) {
+                    continue;
+                }
+
+                try {
+                    const stat = await this.vault.adapter.stat(filePath);
+                    if (!stat || stat.type !== 'file') continue;
+
+                    const isBin = isBinaryFile(filePath);
+                    let hash: string;
+                    let gitSha: string;
+
+                    if (isBin) {
+                        const content = await this.vault.adapter.readBinary(filePath);
+                        hash = hashContent(Array.from(new Uint8Array(content)).join(','));
+                        gitSha = await computeGitBlobShaBinary(content);
+                    } else {
+                        const content = await this.vault.adapter.read(filePath);
+                        hash = hashContent(content);
+                        gitSha = await computeGitBlobSha(content);
+                    }
+
+                    index.set(filePath, {
+                        path: filePath,
+                        hash,
+                        gitSha,
+                        modified: stat.mtime,
+                        size: stat.size,
+                        isBinary: isBin,
+                    });
+                } catch (error) {
+                    console.warn(`[Sync] Failed to index config file ${filePath}:`, error);
+                }
+            }
+
+            // Recurse into subfolders
+            for (const subfolder of listing.folders) {
+                await this.indexFolderRecursive(subfolder, index);
+            }
+        } catch (error) {
+            console.warn(`[Sync] Failed to list folder ${folderPath}:`, error);
+        }
     }
 
     /**
      * Check if a path should be ignored
      */
     private shouldIgnore(path: string): boolean {
-        return matchesIgnorePattern(path, this.ignorePatterns);
+        return matchesIgnorePattern(path, this.getEffectiveIgnorePatterns());
     }
 
     /**
@@ -498,16 +599,27 @@ export class SyncService {
             if (local) {
                 // File exists locally - push it
                 try {
-                    const file = this.vault.getAbstractFileByPath(change.path);
-                    if (!(file instanceof TFile)) continue;
-
                     let content: string;
-                    if (local.isBinary) {
-                        const binaryData = await this.vault.readBinary(file);
-                        content = encodeBase64Binary(binaryData);
+
+                    // Try vault API first (for regular vault files)
+                    const file = this.vault.getAbstractFileByPath(change.path);
+                    if (file instanceof TFile) {
+                        if (local.isBinary) {
+                            const binaryData = await this.vault.readBinary(file);
+                            content = encodeBase64Binary(binaryData);
+                        } else {
+                            const textContent = await this.vault.read(file);
+                            content = encodeBase64(textContent);
+                        }
                     } else {
-                        const textContent = await this.vault.read(file);
-                        content = encodeBase64(textContent);
+                        // Fall back to adapter API (for config folder files)
+                        if (local.isBinary) {
+                            const binaryData = await this.vault.adapter.readBinary(change.path);
+                            content = encodeBase64Binary(binaryData);
+                        } else {
+                            const textContent = await this.vault.adapter.read(change.path);
+                            content = encodeBase64(textContent);
+                        }
                     }
 
                     batchChanges.push({
