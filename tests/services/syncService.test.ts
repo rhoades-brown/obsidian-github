@@ -1,8 +1,9 @@
 import { FileSyncState, LocalFileEntry, RemoteFileEntry, PersistedSyncState } from '../../src/services/syncService';
+import { matchesIgnorePattern } from '../../src/utils/fileUtils';
 
 /**
  * Tests for sync service deletion behavior
- * 
+ *
  * These tests verify that file deletions are properly detected and synced:
  * - Local deletions should be pushed to remote
  * - Remote deletions should be pulled (deleted locally)
@@ -293,3 +294,242 @@ describe('SyncService - Deletion Sync Logic', () => {
     });
 });
 
+describe('SyncService - Effective Ignore Patterns', () => {
+    /**
+     * Simulates getEffectiveIgnorePatterns logic for testing
+     */
+    function getEffectiveIgnorePatterns(
+        basePatterns: string[],
+        configDir: string,
+        syncConfiguration: boolean
+    ): string[] {
+        const patterns = [...basePatterns];
+
+        // Always exclude the sync metadata file
+        const metadataPattern = `${configDir}/github-sync-metadata.json`;
+        if (!patterns.includes(metadataPattern)) {
+            patterns.push(metadataPattern);
+        }
+
+        // Always exclude the plugins folder
+        const pluginsPattern = `${configDir}/plugins/**`;
+        if (!patterns.includes(pluginsPattern)) {
+            patterns.push(pluginsPattern);
+        }
+
+        // Add entire config folder if not syncing configuration
+        if (!syncConfiguration) {
+            const configPattern = `${configDir}/**`;
+            if (!patterns.includes(configPattern)) {
+                patterns.push(configPattern);
+            }
+        }
+
+        return patterns;
+    }
+
+    describe('When syncConfiguration is disabled (default)', () => {
+        it('should exclude entire config folder', () => {
+            const patterns = getEffectiveIgnorePatterns([], '.obsidian', false);
+            expect(matchesIgnorePattern('.obsidian/config.json', patterns)).toBe(true);
+            expect(matchesIgnorePattern('.obsidian/themes/custom.css', patterns)).toBe(true);
+            expect(matchesIgnorePattern('.obsidian/snippets/my.css', patterns)).toBe(true);
+        });
+
+        it('should not exclude vault content files', () => {
+            const patterns = getEffectiveIgnorePatterns([], '.obsidian', false);
+            expect(matchesIgnorePattern('notes/my-note.md', patterns)).toBe(false);
+            expect(matchesIgnorePattern('attachments/image.png', patterns)).toBe(false);
+        });
+    });
+
+    describe('When syncConfiguration is enabled', () => {
+        it('should allow config files to be synced', () => {
+            const patterns = getEffectiveIgnorePatterns([], '.obsidian', true);
+            expect(matchesIgnorePattern('.obsidian/app.json', patterns)).toBe(false);
+            expect(matchesIgnorePattern('.obsidian/appearance.json', patterns)).toBe(false);
+            expect(matchesIgnorePattern('.obsidian/hotkeys.json', patterns)).toBe(false);
+        });
+
+        it('should always exclude plugins folder', () => {
+            const patterns = getEffectiveIgnorePatterns([], '.obsidian', true);
+            expect(matchesIgnorePattern('.obsidian/plugins/my-plugin/main.js', patterns)).toBe(true);
+            expect(matchesIgnorePattern('.obsidian/plugins/my-plugin/manifest.json', patterns)).toBe(true);
+        });
+
+        it('should always exclude sync metadata file', () => {
+            const patterns = getEffectiveIgnorePatterns([], '.obsidian', true);
+            expect(matchesIgnorePattern('.obsidian/github-sync-metadata.json', patterns)).toBe(true);
+        });
+
+        it('should still respect user-defined ignore patterns', () => {
+            const userPatterns = ['.obsidian/workspace.json', '*.tmp'];
+            const patterns = getEffectiveIgnorePatterns(userPatterns, '.obsidian', true);
+            expect(matchesIgnorePattern('.obsidian/workspace.json', patterns)).toBe(true);
+            expect(matchesIgnorePattern('temp.tmp', patterns)).toBe(true);
+        });
+    });
+
+    describe('Pattern deduplication', () => {
+        it('should not add duplicate patterns', () => {
+            const basePatterns = [
+                '.obsidian/github-sync-metadata.json',
+                '.obsidian/plugins/**',
+            ];
+            const patterns = getEffectiveIgnorePatterns(basePatterns, '.obsidian', true);
+
+            const metadataCount = patterns.filter(p => p === '.obsidian/github-sync-metadata.json').length;
+            const pluginsCount = patterns.filter(p => p === '.obsidian/plugins/**').length;
+
+            expect(metadataCount).toBe(1);
+            expect(pluginsCount).toBe(1);
+        });
+    });
+});
+
+describe('SyncService - Path Conversion', () => {
+    /**
+     * Simulates toRemotePath logic
+     */
+    function toRemotePath(localPath: string, subfolderPath: string): string {
+        if (subfolderPath) {
+            return `${subfolderPath}/${localPath}`.replace(/\/+/g, '/');
+        }
+        return localPath;
+    }
+
+    /**
+     * Simulates toLocalPath logic
+     */
+    function toLocalPath(remotePath: string, subfolderPath: string): string {
+        if (subfolderPath && remotePath.startsWith(subfolderPath + '/')) {
+            return remotePath.slice(subfolderPath.length + 1);
+        }
+        return remotePath;
+    }
+
+    describe('toRemotePath', () => {
+        it('should add subfolder prefix when configured', () => {
+            expect(toRemotePath('note.md', 'vault')).toBe('vault/note.md');
+            expect(toRemotePath('folder/note.md', 'my-vault')).toBe('my-vault/folder/note.md');
+        });
+
+        it('should return path unchanged when no subfolder', () => {
+            expect(toRemotePath('note.md', '')).toBe('note.md');
+            expect(toRemotePath('folder/note.md', '')).toBe('folder/note.md');
+        });
+
+        it('should handle nested subfolders', () => {
+            expect(toRemotePath('note.md', 'path/to/vault')).toBe('path/to/vault/note.md');
+        });
+    });
+
+    describe('toLocalPath', () => {
+        it('should strip subfolder prefix when configured', () => {
+            expect(toLocalPath('vault/note.md', 'vault')).toBe('note.md');
+            expect(toLocalPath('my-vault/folder/note.md', 'my-vault')).toBe('folder/note.md');
+        });
+
+        it('should return path unchanged when no subfolder', () => {
+            expect(toLocalPath('note.md', '')).toBe('note.md');
+            expect(toLocalPath('folder/note.md', '')).toBe('folder/note.md');
+        });
+
+        it('should return path unchanged when it does not match subfolder', () => {
+            expect(toLocalPath('other/note.md', 'vault')).toBe('other/note.md');
+        });
+
+        it('should handle nested subfolders', () => {
+            expect(toLocalPath('path/to/vault/note.md', 'path/to/vault')).toBe('note.md');
+        });
+    });
+
+    describe('Round-trip conversion', () => {
+        it('should preserve path through round-trip', () => {
+            const original = 'folder/subfolder/note.md';
+            const subfolder = 'my-vault';
+
+            const remote = toRemotePath(original, subfolder);
+            const local = toLocalPath(remote, subfolder);
+
+            expect(local).toBe(original);
+        });
+    });
+});
+
+describe('SyncService - Modified File Detection', () => {
+    describe('File modification scenarios', () => {
+        it('should detect when only local has changed', () => {
+            const lastSyncState: PersistedSyncState = {
+                lastSyncTime: Date.now() - 10000,
+                lastCommitSha: 'commit123',
+                fileHashes: { 'file.md': 'old-hash' },
+                fileShas: { 'file.md': 'sha123' },
+            };
+
+            const localHash = 'new-hash'; // Changed
+            const remoteSha = 'sha123'; // Same as lastSyncState
+
+            const localChanged = localHash !== lastSyncState.fileHashes['file.md'];
+            const remoteChanged = remoteSha !== lastSyncState.fileShas['file.md'];
+
+            expect(localChanged).toBe(true);
+            expect(remoteChanged).toBe(false);
+        });
+
+        it('should detect when only remote has changed', () => {
+            const lastSyncState: PersistedSyncState = {
+                lastSyncTime: Date.now() - 10000,
+                lastCommitSha: 'commit123',
+                fileHashes: { 'file.md': 'hash123' },
+                fileShas: { 'file.md': 'old-sha' },
+            };
+
+            const localHash = 'hash123'; // Same as lastSyncState
+            const remoteSha = 'new-sha'; // Changed
+
+            const localChanged = localHash !== lastSyncState.fileHashes['file.md'];
+            const remoteChanged = remoteSha !== lastSyncState.fileShas['file.md'];
+
+            expect(localChanged).toBe(false);
+            expect(remoteChanged).toBe(true);
+        });
+
+        it('should detect conflict when both have changed', () => {
+            const lastSyncState: PersistedSyncState = {
+                lastSyncTime: Date.now() - 10000,
+                lastCommitSha: 'commit123',
+                fileHashes: { 'file.md': 'old-hash' },
+                fileShas: { 'file.md': 'old-sha' },
+            };
+
+            const localHash = 'new-hash'; // Changed
+            const remoteSha = 'new-sha'; // Changed
+
+            const localChanged = localHash !== lastSyncState.fileHashes['file.md'];
+            const remoteChanged = remoteSha !== lastSyncState.fileShas['file.md'];
+
+            expect(localChanged).toBe(true);
+            expect(remoteChanged).toBe(true);
+            // This would be a conflict
+        });
+
+        it('should detect no changes when both match last sync', () => {
+            const lastSyncState: PersistedSyncState = {
+                lastSyncTime: Date.now() - 10000,
+                lastCommitSha: 'commit123',
+                fileHashes: { 'file.md': 'hash123' },
+                fileShas: { 'file.md': 'sha123' },
+            };
+
+            const localHash = 'hash123'; // Same
+            const remoteSha = 'sha123'; // Same
+
+            const localChanged = localHash !== lastSyncState.fileHashes['file.md'];
+            const remoteChanged = remoteSha !== lastSyncState.fileShas['file.md'];
+
+            expect(localChanged).toBe(false);
+            expect(remoteChanged).toBe(false);
+        });
+    });
+});
