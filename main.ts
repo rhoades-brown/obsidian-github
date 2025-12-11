@@ -32,7 +32,8 @@ export default class GitHubOctokitPlugin extends Plugin {
 			this.app,
 			this.githubService,
 			this.settings.ignorePatterns,
-			this.settings.subfolderPath
+			this.settings.subfolderPath,
+			this.settings.syncConfiguration
 		);
 
 		// Register custom views
@@ -220,7 +221,11 @@ export default class GitHubOctokitPlugin extends Plugin {
 			await this.saveSettings();
 			this.updateStatusBar();
 			// Update sync service config
-			this.syncService.configure(this.settings.ignorePatterns, this.settings.subfolderPath);
+			this.syncService.configure(
+				this.settings.ignorePatterns,
+				this.settings.subfolderPath,
+				this.settings.syncConfiguration
+			);
 			return true;
 		} else {
 			this.settings.auth.tokenValidated = false;

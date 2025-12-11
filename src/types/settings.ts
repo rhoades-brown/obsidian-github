@@ -64,6 +64,7 @@ export interface GitHubOctokitSettings {
 	// Sync configuration
 	syncSchedule: SyncScheduleConfig;
 	commitConfig: CommitConfig;
+	syncConfiguration: boolean; // Whether to sync .obsidian config folder
 
 	// Conflict handling
 	defaultConflictResolution: ConflictResolution;
@@ -162,6 +163,7 @@ export const DEFAULT_SETTINGS: GitHubOctokitSettings = {
 		includeTimestamp: true,
 		includeFileCount: true,
 	},
+	syncConfiguration: false, // Don't sync .obsidian by default
 	defaultConflictResolution: 'manual',
 	/* eslint-disable obsidianmd/hardcoded-config-path -- default patterns, will be filtered at runtime using configDir */
 	ignorePatterns: [

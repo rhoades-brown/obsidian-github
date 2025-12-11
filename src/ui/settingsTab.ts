@@ -170,7 +170,8 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 						this.plugin.syncService.configure(
 							this.plugin.settings.ignorePatterns,
-							this.plugin.settings.subfolderPath
+							this.plugin.settings.subfolderPath,
+							this.plugin.settings.syncConfiguration
 						);
 						this.display();
 					}));
@@ -192,7 +193,8 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 						this.plugin.syncService.configure(
 							this.plugin.settings.ignorePatterns,
-							this.plugin.settings.subfolderPath
+							this.plugin.settings.subfolderPath,
+							this.plugin.settings.syncConfiguration
 						);
 						this.display();
 					}
@@ -200,7 +202,24 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderSyncTriggersSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Sync triggers').setHeading();
+		new Setting(containerEl).setName('Sync behavior').setHeading();
+
+		const configDir = this.plugin.app.vault.configDir;
+		new Setting(containerEl)
+			.setName('Sync configuration folder')
+			.setDesc(`Include the ${configDir} folder in sync. When disabled, all configuration files are excluded.`)
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.syncConfiguration)
+				.onChange(async (value) => {
+					this.plugin.settings.syncConfiguration = value;
+					await this.plugin.saveSettings();
+					this.plugin.syncService.configure(
+						this.plugin.settings.ignorePatterns,
+						this.plugin.settings.subfolderPath,
+						this.plugin.settings.syncConfiguration
+					);
+				}));
+
 		new Setting(containerEl)
 			.setDesc('Choose when the plugin should automatically sync with GitHub. Enable multiple triggers as needed.');
 
