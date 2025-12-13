@@ -137,6 +137,16 @@ export class SyncService {
             patterns.push(pluginsPattern);
         }
 
+        // Always exclude workspace files - they are machine-specific
+        const workspacePattern = `${configDir}/workspace.json`;
+        if (!patterns.includes(workspacePattern)) {
+            patterns.push(workspacePattern);
+        }
+        const workspaceMobilePattern = `${configDir}/workspace-mobile.json`;
+        if (!patterns.includes(workspaceMobilePattern)) {
+            patterns.push(workspaceMobilePattern);
+        }
+
         // Add entire config folder to ignore patterns if not syncing configuration
         if (!this.syncConfiguration) {
             const configPattern = `${configDir}/**`;

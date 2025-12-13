@@ -163,17 +163,14 @@ export const DEFAULT_SETTINGS: GitHubOctokitSettings = {
 		includeTimestamp: true,
 		includeFileCount: true,
 	},
-	syncConfiguration: false, // Don't sync .obsidian by default
+	syncConfiguration: false, // Don't sync config folder by default
 	defaultConflictResolution: 'manual',
-	/* eslint-disable obsidianmd/hardcoded-config-path -- default patterns, will be filtered at runtime using configDir */
+	// Config-specific patterns are added dynamically using vault.configDir
+	// These are only non-config patterns
 	ignorePatterns: [
-		'.obsidian/workspace.json',
-		'.obsidian/workspace-mobile.json',
-		'.obsidian/github-sync-metadata.json',
 		'.git/**',
 		'.gitignore',
 	],
-	/* eslint-enable obsidianmd/hardcoded-config-path */
 	showStatusBar: true,
 	showNotifications: true,
 	logging: {
