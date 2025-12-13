@@ -335,17 +335,17 @@ export class SyncView extends ItemView {
         // Sync controls
         const syncControls = actionsBar.createDiv({ cls: 'sync-controls' });
 
-        const pullBtn = syncControls.createEl('button', { text: '⬇ Pull' });  // eslint-disable-line obsidianmd/ui/sentence-case
+        const pullBtn = syncControls.createEl('button', { text: 'Pull ⬇' });
         pullBtn.addEventListener('click', () => {
             void this.plugin.performSync('pull').then(() => this.refresh());
         });
 
-        const pushBtn = syncControls.createEl('button', { text: '⬆ Push' });  // eslint-disable-line obsidianmd/ui/sentence-case
+        const pushBtn = syncControls.createEl('button', { text: 'Push ⬆' });
         pushBtn.addEventListener('click', () => {
             void this.plugin.performSync('push').then(() => this.refresh());
         });
 
-        const syncBtn = syncControls.createEl('button', { text: '⟳ Sync', cls: 'mod-cta' });  // eslint-disable-line obsidianmd/ui/sentence-case
+        const syncBtn = syncControls.createEl('button', { text: 'Sync ⟳', cls: 'mod-cta' });
         syncBtn.addEventListener('click', () => {
             void this.plugin.performSync().then(() => this.refresh());
         });

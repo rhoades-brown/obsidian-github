@@ -136,8 +136,7 @@ export class DiffView extends ItemView {
         modeBtn.addEventListener('click', () => this.toggleMode());
 
         // Navigation
-        // eslint-disable-next-line obsidianmd/ui/sentence-case -- navigation button
-        const prevBtn = container.createEl('button', { text: '← Previous' });
+        const prevBtn = container.createEl('button', { text: 'Previous change' });
         prevBtn.addEventListener('click', () => this.prevChange());
 
          

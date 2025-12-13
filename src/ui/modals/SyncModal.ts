@@ -10,8 +10,7 @@ export class SyncModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		// eslint-disable-next-line obsidianmd/ui/sentence-case -- product name
-		contentEl.setText('GitHub Octokit sync');
+		contentEl.setText('Sync in progress');
 	}
 
 	onClose() {

@@ -46,8 +46,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 		}
 
 		// This creates an icon in the left ribbon.
-		// eslint-disable-next-line obsidianmd/ui/sentence-case -- product name
-		const ribbonIconEl = this.addRibbonIcon('github', 'GitHub Octokit - click to sync, right-click for menu', async (evt: MouseEvent) => {
+		const ribbonIconEl = this.addRibbonIcon('github', 'Sync with remote repository', async (evt: MouseEvent) => {
 			if (evt.button === 0) {
 				// Left click - trigger sync
 				await this.performSync();
@@ -194,8 +193,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 		if (!this.settings.auth.token) {
 			setTimeout(() => {
 				new Notice(
-					// eslint-disable-next-line obsidianmd/ui/sentence-case -- product name
-					'GitHub Octokit: Welcome! Open settings → GitHub Octokit to configure sync.',
+					'Welcome! Open settings to configure sync with your remote repository.',
 					15000
 				);
 			}, 2000);

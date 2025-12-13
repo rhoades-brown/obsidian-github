@@ -40,11 +40,10 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Personal access token')
-			// eslint-disable-next-line obsidianmd/ui/sentence-case -- product name and menu paths
-			.setDesc('GitHub PAT with repo access. Create one at GitHub → Settings → Developer settings → Personal access tokens')
+			.setDesc('Personal access token with repo access. Create one in your account developer settings.')
 			.addText(text => {
 				text
-					.setPlaceholder('ghp_xxxxxxxxxxxx')  // eslint-disable-line obsidianmd/ui/sentence-case
+					.setPlaceholder('Paste token here')
 					.setValue(this.plugin.settings.auth.token)
 					.onChange(async (value) => {
 						this.plugin.settings.auth.token = value;
@@ -270,8 +269,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 	}
 
 	private renderCommitSection(containerEl: HTMLElement): void {
-		// eslint-disable-next-line obsidianmd/settings-tab/no-problematic-settings-headings -- false positive, says "options" not "settings"
-		new Setting(containerEl).setName('Commit options').setHeading();
+		new Setting(containerEl).setName('Commit messages').setHeading();
 
 		new Setting(containerEl)
 			.setName('Commit message template')
@@ -372,7 +370,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				.setName('Log file path')
 				.setDesc('Path for the log file (relative to vault root)')
 				.addText(text => text
-					.setPlaceholder('.github-sync.log')  // eslint-disable-line obsidianmd/ui/sentence-case
+					.setPlaceholder('Enter log file path')
 					.setValue(this.plugin.settings.logging.logFilePath)
 					.onChange(async (value) => {
 						this.plugin.settings.logging.logFilePath = value || '.github-sync.log';
@@ -413,14 +411,12 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 			});
 		} else if (this.plugin.settings.auth.token) {
 			containerEl.createEl('div', {
-				// eslint-disable-next-line obsidianmd/ui/sentence-case -- "Connect" is button name
-				text: '⚠️ Token saved but not validated. Click Connect to verify.',
+				text: 'Token saved but not validated. Click connect to verify.',
 				cls: 'github-octokit-status-pending',
 			});
 		} else {
 			containerEl.createEl('div', {
-				// eslint-disable-next-line obsidianmd/ui/sentence-case -- status message
-				text: '❌ Not connected. Enter a personal access token to connect.',
+				text: 'Not connected. Enter a personal access token to connect.',
 				cls: 'github-octokit-status-disconnected',
 			});
 		}
