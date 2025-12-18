@@ -359,11 +359,11 @@ export class SyncService {
     /**
      * Compare local and remote indexes to determine sync actions needed
      */
-    async compareIndexes(
+    compareIndexes(
         localIndex: Map<string, LocalFileEntry>,
         remoteIndex: Map<string, RemoteFileEntry>,
         lastSyncState?: PersistedSyncState
-    ): Promise<FileSyncState[]> {
+    ): FileSyncState[] {
         const results: FileSyncState[] = [];
         const allPaths = new Set([...localIndex.keys(), ...remoteIndex.keys()]);
 
@@ -719,7 +719,7 @@ export class SyncService {
         const remoteIndex = await this.buildRemoteIndex(owner, repo, branch);
 
         // Compare
-        let changes = await this.compareIndexes(localIndex, remoteIndex, lastSyncState);
+        let changes = this.compareIndexes(localIndex, remoteIndex, lastSyncState);
 
         // Filter to specific paths if requested
         if (options.paths && options.paths.length > 0) {
