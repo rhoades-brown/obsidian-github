@@ -75,7 +75,7 @@ export interface BatchFileChange {
  * GitHub Service class - handles all GitHub API interactions
  */
 export class GitHubService {
-    private octokit: Octokit | null = null;
+    private octokit?: Octokit;
     private _isAuthenticated = false;
     private _user: GitHubUser | null = null;
     private _rateLimit: RateLimitInfo | null = null;
@@ -87,7 +87,7 @@ export class GitHubService {
         if (!token) {
             this._isAuthenticated = false;
             this._user = null;
-            this.octokit = null;
+            this.octokit = undefined;
             return false;
         }
 
@@ -109,7 +109,7 @@ export class GitHubService {
             console.error('GitHub authentication failed:', error);
             this._isAuthenticated = false;
             this._user = null;
-            this.octokit = null;
+            this.octokit = undefined;
             return false;
         }
     }
@@ -596,7 +596,7 @@ export class GitHubService {
      * Disconnect and clear authentication
      */
     disconnect(): void {
-        this.octokit = null;
+        this.octokit = undefined;
         this._isAuthenticated = false;
         this._user = null;
         this._rateLimit = null;

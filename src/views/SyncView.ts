@@ -76,7 +76,7 @@ export class SyncView extends ItemView {
                 this.plugin.settings.repo.branch
             );
 
-            this.changes = await this.plugin.syncService.compareIndexes(
+            this.changes = this.plugin.syncService.compareIndexes(
                 localIndex,
                 remoteIndex,
                 this.plugin['syncState'] || undefined
