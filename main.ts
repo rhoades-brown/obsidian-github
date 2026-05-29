@@ -4,7 +4,7 @@ import { SyncService, PersistedSyncState, SyncResult } from './src/services/sync
 import { LoggerService } from './src/services/loggerService';
 import { DiffView, DIFF_VIEW_TYPE } from './src/views/DiffView';
 import { SyncView, SYNC_VIEW_TYPE } from './src/views/SyncView';
-import { GitHubOctokitSettingTab, SyncModal } from './src/ui';
+import { GitHubOctokitSettingTab } from './src/ui';
 import { GitHubOctokitSettings, DEFAULT_SETTINGS, AdditionalRepoConfig, VaultRepoConfig, VAULT_REPOS_CONFIG_PATH } from './src/types/settings';
 
 /** Per-repo runtime state for additional repositories */
@@ -146,15 +146,6 @@ export default class GitHubOctokitPlugin extends Plugin {
 			name: 'Push to GitHub',
 			callback: async () => {
 				await this.performSync('push');
-			}
-		});
-
-		// Command: Open sync modal
-		this.addCommand({
-			id: 'open-sync-modal',
-			name: 'Open sync modal',
-			callback: () => {
-				new SyncModal(this.app).open();
 			}
 		});
 
