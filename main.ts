@@ -14,10 +14,10 @@ interface PersistedPluginData extends Partial<GitHubOctokitSettings> {
 }
 
 export default class GitHubOctokitPlugin extends Plugin {
-	settings: GitHubOctokitSettings;
-	githubService: GitHubService;
-	syncService: SyncService;
-	logger: LoggerService;
+	settings!: GitHubOctokitSettings;
+	githubService!: GitHubService;
+	syncService!: SyncService;
+	logger!: LoggerService;
 	private statusBarItem: HTMLElement | null = null;
 	private syncState: PersistedSyncState | null = null;
 	private syncIntervalId: number | null = null;
@@ -192,12 +192,12 @@ export default class GitHubOctokitPlugin extends Plugin {
 
 		// Sync on startup if enabled
 		if (this.settings.syncSchedule.syncOnStartup && this.githubService.isAuthenticated && this.settings.repo) {
-			activeWindow.setTimeout(() => { void this.performSync(); }, 3000); // Delay to let Obsidian fully load
+			window.setTimeout(() => { void this.performSync(); }, 3000); // Delay to let Obsidian fully load
 		}
 
 		// First-run setup notice
 		if (!this.settings.auth.token) {
-			activeWindow.setTimeout(() => {
+			window.setTimeout(() => {
 				new Notice(
 					'Welcome! Open settings to configure sync with your remote repository.',
 					15000
