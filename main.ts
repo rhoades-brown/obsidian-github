@@ -5,12 +5,20 @@ import { LoggerService } from './src/services/loggerService';
 import { DiffView, DIFF_VIEW_TYPE } from './src/views/DiffView';
 import { SyncView, SYNC_VIEW_TYPE } from './src/views/SyncView';
 import { GitHubOctokitSettingTab, SyncModal } from './src/ui';
-import { GitHubOctokitSettings, DEFAULT_SETTINGS } from './src/types/settings';
+import { GitHubOctokitSettings, DEFAULT_SETTINGS, AdditionalRepoConfig } from './src/types/settings';
+
+/** Per-repo runtime state for additional repositories */
+export interface AdditionalRepoRuntime {
+	config: AdditionalRepoConfig;
+	githubService: GitHubService;
+	syncService: SyncService;
+	syncState: PersistedSyncState | null;
+}
 
 /** Shape of the data persisted via loadData/saveData */
 interface PersistedPluginData extends Partial<GitHubOctokitSettings> {
 	syncState?: PersistedSyncState | null;
-	additionalRepoStates?: Record<string, PersistedSyncState>;
+	additionalRepoStates?: Record<string, PersistedSyncState | null>;
 }
 
 export default class GitHubOctokitPlugin extends Plugin {
@@ -20,6 +28,8 @@ export default class GitHubOctokitPlugin extends Plugin {
 	logger!: LoggerService;
 	private statusBarItem: HTMLElement | null = null;
 	private syncState: PersistedSyncState | null = null;
+	private additionalRepoStates: Record<string, PersistedSyncState | null> = {};
+	private additionalRepos: Map<string, AdditionalRepoRuntime> = new Map();
 	private syncIntervalId: number | null = null;
 	private isSyncing = false;
 
@@ -50,6 +60,9 @@ export default class GitHubOctokitPlugin extends Plugin {
 		if (this.settings.auth.token) {
 			await this.validateAndConnect();
 		}
+
+		// Initialize additional repos
+		await this.initializeAdditionalRepos();
 
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon('github', 'Sync with remote repository', async (evt: MouseEvent) => {
@@ -208,6 +221,10 @@ export default class GitHubOctokitPlugin extends Plugin {
 
 	onunload() {
 		this.githubService.disconnect();
+		for (const runtime of this.additionalRepos.values()) {
+			runtime.githubService.disconnect();
+		}
+		this.additionalRepos.clear();
 		if (this.syncIntervalId) {
 			window.clearInterval(this.syncIntervalId);
 		}
@@ -224,9 +241,9 @@ export default class GitHubOctokitPlugin extends Plugin {
 			this.settings.auth.username = this.githubService.user.login;
 			await this.saveSettings();
 			this.updateStatusBar();
-			// Update sync service config
+			// Update sync service config with additional repo exclusions
 			this.syncService.configure(
-				this.settings.ignorePatterns,
+				this.getMainRepoIgnorePatterns(),
 				this.settings.subfolderPath,
 				this.settings.syncConfiguration
 			);
@@ -238,6 +255,87 @@ export default class GitHubOctokitPlugin extends Plugin {
 			this.updateStatusBar();
 			return false;
 		}
+	}
+
+	/**
+	 * Get the additional repo runtime instances (for SyncView)
+	 */
+	getAdditionalRepos(): Map<string, AdditionalRepoRuntime> {
+		return this.additionalRepos;
+	}
+
+	/**
+	 * Get ignore patterns for the main repo, including additional repo directories
+	 */
+	getMainRepoIgnorePatterns(): string[] {
+		const patterns = [...this.settings.ignorePatterns];
+		// Exclude additional repo directories from main repo sync
+		for (const repoConfig of this.settings.additionalRepos) {
+			if (repoConfig.enabled && repoConfig.localPath) {
+				const dirPattern = `${repoConfig.localPath}/**`;
+				if (!patterns.includes(dirPattern)) {
+					patterns.push(dirPattern);
+				}
+			}
+		}
+		return patterns;
+	}
+
+	/**
+	 * Initialize additional repo services and authenticate them
+	 */
+	async initializeAdditionalRepos(): Promise<void> {
+		// Clean up existing
+		for (const runtime of this.additionalRepos.values()) {
+			runtime.githubService.disconnect();
+		}
+		this.additionalRepos.clear();
+
+		for (const repoConfig of this.settings.additionalRepos) {
+			if (!repoConfig.enabled) continue;
+
+			const token = repoConfig.useMainToken
+				? this.settings.auth.token
+				: repoConfig.token;
+
+			if (!token) {
+				this.logger.warn('AdditionalRepo', `No token for ${repoConfig.owner}/${repoConfig.repo}, skipping`);
+				continue;
+			}
+
+			const ghService = new GitHubService();
+			const authenticated = await ghService.authenticate(token);
+
+			if (!authenticated) {
+				this.logger.warn('AdditionalRepo', `Failed to authenticate ${repoConfig.owner}/${repoConfig.repo}`);
+				continue;
+			}
+
+			const syncService = new SyncService(
+				this.app,
+				ghService,
+				repoConfig.ignorePatterns,
+				repoConfig.subfolderPath,
+				false, // No config sync for additional repos
+				repoConfig.localPath
+			);
+
+			this.additionalRepos.set(repoConfig.id, {
+				config: repoConfig,
+				githubService: ghService,
+				syncService,
+				syncState: this.additionalRepoStates[repoConfig.id] || null,
+			});
+
+			this.logger.info('AdditionalRepo', `Initialized ${repoConfig.owner}/${repoConfig.repo} → ${repoConfig.localPath}`);
+		}
+
+		// Update main repo ignore patterns to exclude additional repo directories
+		this.syncService.configure(
+			this.getMainRepoIgnorePatterns(),
+			this.settings.subfolderPath,
+			this.settings.syncConfiguration
+		);
 	}
 
 	/**
@@ -386,6 +484,9 @@ export default class GitHubOctokitPlugin extends Plugin {
 				errors: result.errors,
 			});
 
+			// Sync additional repos
+			await this.syncAdditionalRepos(direction, commitMessage);
+
 			// Show result notification
 			if (this.settings.showNotifications) {
 				if (result.success) {
@@ -448,29 +549,73 @@ export default class GitHubOctokitPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * Sync all enabled additional repositories
+	 */
+	private async syncAdditionalRepos(direction: 'pull' | 'push' | 'sync', commitMessage: string): Promise<void> {
+		for (const [id, runtime] of this.additionalRepos) {
+			try {
+				const { config, syncService, syncState } = runtime;
+				this.logger.info('AdditionalRepo', `Syncing ${config.owner}/${config.repo}`, { direction });
+
+				const { result: repoResult, newState: repoNewState } = await syncService.sync(
+					config.owner,
+					config.repo,
+					config.branch,
+					commitMessage,
+					syncState || undefined,
+					{ direction }
+				);
+
+				// Update runtime state
+				runtime.syncState = repoNewState;
+				this.additionalRepoStates[id] = repoNewState;
+				await this.saveSyncState();
+
+				if (repoResult.filesProcessed > 0) {
+					this.logger.info('AdditionalRepo', `${config.owner}/${config.repo}: ${repoResult.filesPulled} pulled, ${repoResult.filesPushed} pushed`);
+				}
+
+				if (repoResult.errors.length > 0) {
+					this.logger.error('AdditionalRepo', `Errors in ${config.owner}/${config.repo}`, { errors: repoResult.errors });
+				}
+			} catch (error) {
+				const msg = error instanceof Error ? error.message : String(error);
+				this.logger.error('AdditionalRepo', `Failed to sync ${runtime.config.owner}/${runtime.config.repo}: ${msg}`);
+			}
+		}
+	}
+
 	async loadSettings() {
 		const data = (await this.loadData() || {}) as PersistedPluginData;
-		// Extract syncState before merging with defaults - syncState is separate from settings
-		const { syncState: _ignored, ...settingsData } = data;
+		// Extract syncState and additionalRepoStates before merging with defaults
+		const { syncState: _ignored, additionalRepoStates: _ignored2, ...settingsData } = data;
 		void _ignored; // intentionally unused - just extracting syncState from data
+		void _ignored2;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
 	}
 
 	async saveSettings() {
 		// Preserve syncState when saving settings
 		const data = (await this.loadData() || {}) as PersistedPluginData;
-		await this.saveData({ ...this.settings, syncState: data.syncState });
+		await this.saveData({
+			...this.settings,
+			syncState: data.syncState,
+			additionalRepoStates: data.additionalRepoStates,
+		});
 	}
 
 	async loadSyncState() {
 		const data = await this.loadData() as PersistedPluginData | null;
 		this.syncState = data?.syncState || null;
+		this.additionalRepoStates = data?.additionalRepoStates || {};
 	}
 
 	async saveSyncState() {
 		// Preserve settings when saving syncState
 		const data = (await this.loadData() || {}) as PersistedPluginData;
 		data.syncState = this.syncState;
+		data.additionalRepoStates = this.additionalRepoStates;
 		await this.saveData(data);
 	}
 

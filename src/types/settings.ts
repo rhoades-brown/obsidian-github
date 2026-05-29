@@ -52,6 +52,30 @@ export interface CommitConfig {
 	includeFileCount: boolean;
 }
 
+/** Configuration for an additional repository synced to a vault directory */
+export interface AdditionalRepoConfig {
+	/** Stable unique identifier for this repo config */
+	id: string;
+	/** Repository owner (user or organization) */
+	owner: string;
+	/** Repository name */
+	repo: string;
+	/** Branch to sync with */
+	branch: string;
+	/** Local vault directory to sync this repo into */
+	localPath: string;
+	/** Whether to use the main auth token or a separate one */
+	useMainToken: boolean;
+	/** Separate personal access token (used when useMainToken is false) */
+	token: string;
+	/** Subfolder within the remote repo to sync (optional) */
+	subfolderPath: string;
+	/** Ignore patterns specific to this repo */
+	ignorePatterns: string[];
+	/** Whether this repo is enabled for syncing */
+	enabled: boolean;
+}
+
 /** Main plugin settings */
 export interface GitHubOctokitSettings {
 	// Authentication
@@ -71,6 +95,9 @@ export interface GitHubOctokitSettings {
 
 	// Ignore patterns
 	ignorePatterns: string[];
+
+	// Additional repositories
+	additionalRepos: AdditionalRepoConfig[];
 
 	// UI preferences
 	showStatusBar: boolean;
@@ -165,6 +192,7 @@ export const DEFAULT_SETTINGS: GitHubOctokitSettings = {
 	},
 	syncConfiguration: false, // Don't sync config folder by default
 	defaultConflictResolution: 'manual',
+	additionalRepos: [],
 	// Config-specific patterns are added dynamically using vault.configDir
 	// These are only non-config patterns
 	ignorePatterns: [

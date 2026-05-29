@@ -606,3 +606,32 @@
     padding: 2px 6px;
     font-size: 12px;
 }
+
+/* ============================================
+   Additional Repos Settings
+   ============================================ */
+
+.github-octokit-additional-repo {
+    margin: 12px 0;
+    padding: 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    background: var(--background-secondary);
+}
+
+.github-octokit-additional-repo .setting-item {
+    border-top: none;
+    padding: 6px 0;
+}
+
+/* Repo badge in sync file list */
+.file-repo-badge {
+    display: inline-block;
+    font-size: 0.7em;
+    padding: 1px 4px;
+    margin-right: 4px;
+    border-radius: 3px;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    vertical-align: middle;
+}
