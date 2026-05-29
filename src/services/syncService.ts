@@ -93,13 +93,15 @@ export class SyncService {
     private ignorePatterns: string[];
     private subfolderPath: string;
     private syncConfiguration: boolean;
+    private localBasePath: string;
 
     constructor(
         app: App,
         githubService: GitHubService,
         ignorePatterns: string[] = [],
         subfolderPath: string = '',
-        syncConfiguration: boolean = false
+        syncConfiguration: boolean = false,
+        localBasePath: string = ''
     ) {
         this.app = app;
         this.vault = app.vault;
@@ -107,15 +109,22 @@ export class SyncService {
         this.ignorePatterns = ignorePatterns;
         this.subfolderPath = subfolderPath;
         this.syncConfiguration = syncConfiguration;
+        this.localBasePath = localBasePath;
     }
 
     /**
      * Update configuration
      */
-    configure(ignorePatterns: string[], subfolderPath: string, syncConfiguration: boolean = false): void {
+    configure(
+        ignorePatterns: string[],
+        subfolderPath: string,
+        syncConfiguration: boolean = false,
+        localBasePath: string = ''
+    ): void {
         this.ignorePatterns = ignorePatterns;
         this.subfolderPath = subfolderPath;
         this.syncConfiguration = syncConfiguration;
+        this.localBasePath = localBasePath;
     }
 
     /**
@@ -163,46 +172,73 @@ export class SyncService {
     // ========================================================================
 
     /**
+     * Convert an absolute vault path to a path relative to localBasePath.
+     * Returns null if the path is not under localBasePath.
+     */
+    private toRelativeLocalPath(absolutePath: string): string | null {
+        if (!this.localBasePath) return absolutePath;
+        if (!absolutePath.startsWith(this.localBasePath + '/')) return null;
+        return absolutePath.slice(this.localBasePath.length + 1);
+    }
+
+    /**
+     * Convert a relative path back to an absolute vault path (prepend localBasePath).
+     */
+    toAbsoluteLocalPath(relativePath: string): string {
+        if (!this.localBasePath) return relativePath;
+        return normalizePath(`${this.localBasePath}/${relativePath}`);
+    }
+
+    /**
      * Build index of all local files in the vault
+     * When localBasePath is set, only files under that directory are indexed
+     * and paths are stored relative to localBasePath.
      */
     async buildLocalIndex(): Promise<Map<string, LocalFileEntry>> {
         const index = new Map<string, LocalFileEntry>();
-        const files = this.vault.getFiles();
 
-        for (const file of files) {
-            // Skip ignored files
-            if (this.shouldIgnore(file.path)) {
-                continue;
+        if (this.localBasePath) {
+            // Additional repo mode: scan only files under localBasePath using adapter
+            await this.indexFolderRecursive(this.localBasePath, index, true);
+        } else {
+            // Main repo mode: scan all vault files
+            const files = this.vault.getFiles();
+
+            for (const file of files) {
+                // Skip ignored files
+                if (this.shouldIgnore(file.path)) {
+                    continue;
+                }
+
+                const isBin = isBinaryFile(file.path);
+                let hash: string;
+                let gitSha: string;
+
+                if (isBin) {
+                    const content = await this.vault.readBinary(file);
+                    hash = hashContent(Array.from(new Uint8Array(content)).join(','));
+                    gitSha = await computeGitBlobShaBinary(content);
+                } else {
+                    const content = await this.vault.read(file);
+                    hash = hashContent(content);
+                    gitSha = await computeGitBlobSha(content);
+                }
+
+                index.set(file.path, {
+                    path: file.path,
+                    hash,
+                    gitSha,
+                    modified: file.stat.mtime,
+                    size: file.stat.size,
+                    isBinary: isBin,
+                });
             }
 
-            const isBin = isBinaryFile(file.path);
-            let hash: string;
-            let gitSha: string;
-
-            if (isBin) {
-                const content = await this.vault.readBinary(file);
-                hash = hashContent(Array.from(new Uint8Array(content)).join(','));
-                gitSha = await computeGitBlobShaBinary(content);
-            } else {
-                const content = await this.vault.read(file);
-                hash = hashContent(content);
-                gitSha = await computeGitBlobSha(content);
+            // If syncing configuration, also include files from the config folder
+            // (vault.getFiles() doesn't include config folder files)
+            if (this.syncConfiguration) {
+                await this.indexConfigFolder(index);
             }
-
-            index.set(file.path, {
-                path: file.path,
-                hash,
-                gitSha,
-                modified: file.stat.mtime,
-                size: file.stat.size,
-                isBinary: isBin,
-            });
-        }
-
-        // If syncing configuration, also include files from the config folder
-        // (vault.getFiles() doesn't include config folder files)
-        if (this.syncConfiguration) {
-            await this.indexConfigFolder(index);
         }
 
         return index;
@@ -218,14 +254,27 @@ export class SyncService {
 
     /**
      * Recursively index files in a folder using the adapter API
+     * When stripBasePath is true, paths are stored relative to localBasePath
      */
-    private async indexFolderRecursive(folderPath: string, index: Map<string, LocalFileEntry>): Promise<void> {
+    private async indexFolderRecursive(
+        folderPath: string,
+        index: Map<string, LocalFileEntry>,
+        stripBasePath: boolean = false
+    ): Promise<void> {
         try {
             const listing = await this.vault.adapter.list(folderPath);
 
             // Process files
             for (const filePath of listing.files) {
-                if (this.shouldIgnore(filePath)) {
+                // Determine the key path (relative if stripping base, absolute otherwise)
+                const keyPath = stripBasePath
+                    ? this.toRelativeLocalPath(filePath)
+                    : filePath;
+
+                // Skip files outside localBasePath when stripping
+                if (keyPath === null) continue;
+
+                if (this.shouldIgnore(keyPath)) {
                     continue;
                 }
 
@@ -247,8 +296,8 @@ export class SyncService {
                         gitSha = await computeGitBlobSha(content);
                     }
 
-                    index.set(filePath, {
-                        path: filePath,
+                    index.set(keyPath, {
+                        path: keyPath,
                         hash,
                         gitSha,
                         modified: stat.mtime,
@@ -256,13 +305,13 @@ export class SyncService {
                         isBinary: isBin,
                     });
                 } catch (error) {
-                    console.warn(`[Sync] Failed to index config file ${filePath}:`, error);
+                    console.warn(`[Sync] Failed to index file ${filePath}:`, error);
                 }
             }
 
             // Recurse into subfolders
             for (const subfolder of listing.folders) {
-                await this.indexFolderRecursive(subfolder, index);
+                await this.indexFolderRecursive(subfolder, index, stripBasePath);
             }
         } catch (error) {
             console.warn(`[Sync] Failed to list folder ${folderPath}:`, error);
@@ -548,19 +597,24 @@ export class SyncService {
 
             const remote = remoteIndex.get(change.path);
 
+            // Convert relative path to absolute vault path for file operations
+            const absolutePath = this.toAbsoluteLocalPath(change.path);
+
             if (remote) {
                 // File exists on remote - pull it
                 const result = await this.pullFile(
                     owner,
                     repo,
                     remote.path,
-                    change.path
+                    absolutePath
                 );
+                // Store the relative path in the result for consistency
+                result.path = change.path;
                 results.push(result);
             } else if (change.status === 'deleted') {
                 // File was deleted on remote - delete locally (using trash to respect user preferences)
                 try {
-                    const file = this.vault.getAbstractFileByPath(change.path);
+                    const file = this.vault.getAbstractFileByPath(absolutePath);
                     if (file) {
                         await this.app.fileManager.trashFile(file);
                     }
@@ -605,6 +659,8 @@ export class SyncService {
 
             const local = localIndex.get(change.path);
             const remotePath = this.toRemotePath(change.path);
+            // Convert relative path to absolute vault path for file operations
+            const absolutePath = this.toAbsoluteLocalPath(change.path);
 
             if (local) {
                 // File exists locally - push it
@@ -612,7 +668,7 @@ export class SyncService {
                     let content: string;
 
                     // Try vault API first (for regular vault files)
-                    const file = this.vault.getAbstractFileByPath(change.path);
+                    const file = this.vault.getAbstractFileByPath(absolutePath);
                     if (file instanceof TFile) {
                         if (local.isBinary) {
                             const binaryData = await this.vault.readBinary(file);
@@ -622,12 +678,12 @@ export class SyncService {
                             content = encodeBase64(textContent);
                         }
                     } else {
-                        // Fall back to adapter API (for config folder files)
+                        // Fall back to adapter API (for config folder files or additional repo files)
                         if (local.isBinary) {
-                            const binaryData = await this.vault.adapter.readBinary(change.path);
+                            const binaryData = await this.vault.adapter.readBinary(absolutePath);
                             content = encodeBase64Binary(binaryData);
                         } else {
-                            const textContent = await this.vault.adapter.read(change.path);
+                            const textContent = await this.vault.adapter.read(absolutePath);
                             content = encodeBase64(textContent);
                         }
                     }

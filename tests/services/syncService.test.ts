@@ -533,3 +533,206 @@ describe('SyncService - Modified File Detection', () => {
         });
     });
 });
+
+// ============================================================================
+// Multi-Repo Path Validation Tests
+// ============================================================================
+
+describe('Multi-repo path validation', () => {
+    interface AdditionalRepoLike {
+        id: string;
+        localPath: string;
+        owner: string;
+        repo: string;
+        enabled: boolean;
+    }
+
+    function validateLocalPath(
+        localPath: string,
+        excludeId: string,
+        repos: AdditionalRepoLike[]
+    ): string | null {
+        if (!localPath) return null;
+        for (const repo of repos) {
+            if (repo.id === excludeId) continue;
+            if (!repo.localPath) continue;
+            if (repo.localPath === localPath) {
+                return `Path "${localPath}" is already used by ${repo.owner}/${repo.repo}`;
+            }
+            if (localPath.startsWith(repo.localPath + '/') || repo.localPath.startsWith(localPath + '/')) {
+                return `Path "${localPath}" overlaps with ${repo.owner}/${repo.repo} (${repo.localPath})`;
+            }
+        }
+        return null;
+    }
+
+    test('should allow non-overlapping paths', () => {
+        const repos: AdditionalRepoLike[] = [
+            { id: 'a', localPath: 'shared-templates', owner: 'org', repo: 'templates', enabled: true },
+        ];
+        expect(validateLocalPath('reference-notes', 'b', repos)).toBeNull();
+    });
+
+    test('should reject exact duplicate paths', () => {
+        const repos: AdditionalRepoLike[] = [
+            { id: 'a', localPath: 'shared-templates', owner: 'org', repo: 'templates', enabled: true },
+        ];
+        const result = validateLocalPath('shared-templates', 'b', repos);
+        expect(result).toContain('already used');
+    });
+
+    test('should reject nested paths (child inside parent)', () => {
+        const repos: AdditionalRepoLike[] = [
+            { id: 'a', localPath: 'docs', owner: 'org', repo: 'docs', enabled: true },
+        ];
+        const result = validateLocalPath('docs/sub', 'b', repos);
+        expect(result).toContain('overlaps');
+    });
+
+    test('should reject nested paths (parent containing child)', () => {
+        const repos: AdditionalRepoLike[] = [
+            { id: 'a', localPath: 'docs/sub', owner: 'org', repo: 'sub', enabled: true },
+        ];
+        const result = validateLocalPath('docs', 'b', repos);
+        expect(result).toContain('overlaps');
+    });
+
+    test('should skip self when validating', () => {
+        const repos: AdditionalRepoLike[] = [
+            { id: 'a', localPath: 'shared-templates', owner: 'org', repo: 'templates', enabled: true },
+        ];
+        expect(validateLocalPath('shared-templates', 'a', repos)).toBeNull();
+    });
+
+    test('should allow empty local path', () => {
+        const repos: AdditionalRepoLike[] = [
+            { id: 'a', localPath: 'shared-templates', owner: 'org', repo: 'templates', enabled: true },
+        ];
+        expect(validateLocalPath('', 'b', repos)).toBeNull();
+    });
+
+    test('should skip repos with empty local paths', () => {
+        const repos: AdditionalRepoLike[] = [
+            { id: 'a', localPath: '', owner: 'org', repo: 'templates', enabled: true },
+        ];
+        expect(validateLocalPath('anything', 'b', repos)).toBeNull();
+    });
+});
+
+// ============================================================================
+// Main Repo Ignore Patterns Tests
+// ============================================================================
+
+describe('Main repo ignore patterns with additional repos', () => {
+    function getMainRepoIgnorePatterns(
+        basePatterns: string[],
+        additionalRepos: Array<{ enabled: boolean; localPath: string }>
+    ): string[] {
+        const patterns = [...basePatterns];
+        for (const repoConfig of additionalRepos) {
+            if (repoConfig.enabled && repoConfig.localPath) {
+                const dirPattern = `${repoConfig.localPath}/**`;
+                if (!patterns.includes(dirPattern)) {
+                    patterns.push(dirPattern);
+                }
+            }
+        }
+        return patterns;
+    }
+
+    test('should include base patterns when no additional repos', () => {
+        const result = getMainRepoIgnorePatterns(['.git/**', '*.tmp'], []);
+        expect(result).toEqual(['.git/**', '*.tmp']);
+    });
+
+    test('should add glob patterns for enabled repos', () => {
+        const result = getMainRepoIgnorePatterns(['.git/**'], [
+            { enabled: true, localPath: 'shared' },
+            { enabled: true, localPath: 'reference' },
+        ]);
+        expect(result).toContain('shared/**');
+        expect(result).toContain('reference/**');
+    });
+
+    test('should not add patterns for disabled repos', () => {
+        const result = getMainRepoIgnorePatterns(['.git/**'], [
+            { enabled: false, localPath: 'shared' },
+        ]);
+        expect(result).not.toContain('shared/**');
+    });
+
+    test('should not add patterns for repos without a local path', () => {
+        const result = getMainRepoIgnorePatterns(['.git/**'], [
+            { enabled: true, localPath: '' },
+        ]);
+        expect(result).toEqual(['.git/**']);
+    });
+
+    test('should not duplicate existing patterns', () => {
+        const result = getMainRepoIgnorePatterns(['shared/**'], [
+            { enabled: true, localPath: 'shared' },
+        ]);
+        expect(result.filter(p => p === 'shared/**')).toHaveLength(1);
+    });
+
+    test('pattern matching with additional repo directories', () => {
+        const patterns = getMainRepoIgnorePatterns([], [
+            { enabled: true, localPath: 'shared-templates' },
+        ]);
+        // The generated pattern should match files inside the directory
+        expect(matchesIgnorePattern('shared-templates/file.md', patterns)).toBe(true);
+        expect(matchesIgnorePattern('shared-templates/sub/file.md', patterns)).toBe(true);
+        // But not files outside
+        expect(matchesIgnorePattern('other/file.md', patterns)).toBe(false);
+    });
+});
+
+// ============================================================================
+// toRelativeLocalPath / toAbsoluteLocalPath Tests
+// ============================================================================
+
+describe('Path conversion for additional repos', () => {
+    // Standalone functions matching the SyncService logic
+    function toRelativeLocalPath(absolutePath: string, localBasePath: string): string | null {
+        if (!localBasePath) return absolutePath;
+        if (!absolutePath.startsWith(localBasePath + '/')) return null;
+        return absolutePath.slice(localBasePath.length + 1);
+    }
+
+    function toAbsoluteLocalPath(relativePath: string, localBasePath: string): string {
+        if (!localBasePath) return relativePath;
+        return `${localBasePath}/${relativePath}`;
+    }
+
+    test('toRelativeLocalPath returns path unchanged when no base', () => {
+        expect(toRelativeLocalPath('notes/file.md', '')).toBe('notes/file.md');
+    });
+
+    test('toRelativeLocalPath strips base path', () => {
+        expect(toRelativeLocalPath('shared/file.md', 'shared')).toBe('file.md');
+    });
+
+    test('toRelativeLocalPath strips nested base path', () => {
+        expect(toRelativeLocalPath('shared/sub/file.md', 'shared')).toBe('sub/file.md');
+    });
+
+    test('toRelativeLocalPath returns null for path outside base', () => {
+        expect(toRelativeLocalPath('other/file.md', 'shared')).toBeNull();
+    });
+
+    test('toRelativeLocalPath returns null for partial prefix match', () => {
+        expect(toRelativeLocalPath('shared-extra/file.md', 'shared')).toBeNull();
+    });
+
+    test('toAbsoluteLocalPath returns path unchanged when no base', () => {
+        expect(toAbsoluteLocalPath('file.md', '')).toBe('file.md');
+    });
+
+    test('toAbsoluteLocalPath prepends base path', () => {
+        expect(toAbsoluteLocalPath('file.md', 'shared')).toBe('shared/file.md');
+    });
+
+    test('toAbsoluteLocalPath prepends nested base path', () => {
+        expect(toAbsoluteLocalPath('sub/file.md', 'shared')).toBe('shared/sub/file.md');
+    });
+});

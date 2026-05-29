@@ -17,6 +17,8 @@ interface FileGroup {
 export class SyncView extends ItemView {
     private plugin: GitHubOctokitPlugin;
     private changes: FileSyncState[] = [];
+    /** Maps file path to a repo label (empty string for main repo) */
+    private fileRepoLabels: Map<string, string> = new Map();
     private stagedPaths: Set<string> = new Set();
     private isRefreshing = false;
     private logUnsubscribe: (() => void) | null = null;
@@ -68,7 +70,9 @@ export class SyncView extends ItemView {
                 return;
             }
 
-            // Build indexes and compare
+            this.fileRepoLabels.clear();
+
+            // Build indexes and compare for main repo
             const localIndex = await this.plugin.syncService.buildLocalIndex();
             const remoteIndex = await this.plugin.syncService.buildRemoteIndex(
                 this.plugin.settings.repo.owner,
@@ -84,6 +88,38 @@ export class SyncView extends ItemView {
 
             // Filter to only changed files
             this.changes = this.changes.filter(c => c.status !== 'unchanged');
+
+            // Label main repo files
+            for (const change of this.changes) {
+                this.fileRepoLabels.set(change.path, '');
+            }
+
+            // Gather changes from additional repos
+            for (const [, runtime] of this.plugin.getAdditionalRepos()) {
+                try {
+                    const addlLocal = await runtime.syncService.buildLocalIndex();
+                    const addlRemote = await runtime.syncService.buildRemoteIndex(
+                        runtime.config.owner,
+                        runtime.config.repo,
+                        runtime.config.branch
+                    );
+                    const addlChanges = runtime.syncService.compareIndexes(
+                        addlLocal,
+                        addlRemote,
+                        runtime.syncState || undefined
+                    ).filter(c => c.status !== 'unchanged');
+
+                    const repoLabel = `${runtime.config.owner}/${runtime.config.repo}`;
+                    for (const change of addlChanges) {
+                        // Convert relative path to absolute vault path for display
+                        const vaultPath = runtime.syncService.toAbsoluteLocalPath(change.path);
+                        this.fileRepoLabels.set(vaultPath, repoLabel);
+                        this.changes.push({ ...change, path: vaultPath });
+                    }
+                } catch (error) {
+                    console.error(`Failed to refresh additional repo ${runtime.config.owner}/${runtime.config.repo}:`, error);
+                }
+            }
 
             this.render();
         } catch (error) {
@@ -267,7 +303,13 @@ export class SyncView extends ItemView {
             // File name with hover tooltip
             const pathParts = file.path.split('/');
             const displayName = pathParts[pathParts.length - 1];
-            const fileNameEl = fileEl.createSpan({ cls: 'file-name', text: displayName });
+            const fileNameEl = fileEl.createSpan({ cls: 'file-name' });
+            const repoLabel = this.fileRepoLabels.get(file.path);
+            if (repoLabel) {
+                const badge = fileNameEl.createSpan({ cls: 'file-repo-badge', text: repoLabel });
+                badge.setAttribute('title', `From additional repo: ${repoLabel}`);
+            }
+            fileNameEl.appendText(displayName);
             fileNameEl.setAttribute('title', file.path);
 
             // Actions
