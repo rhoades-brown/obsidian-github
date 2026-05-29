@@ -147,36 +147,9 @@ Add custom patterns in Settings → GitHub Octokit → Ignore Patterns:
 - `*.tmp` - All .tmp files
 - `.obsidian/**` - All Obsidian settings (if desired)
 
-## Development
+## Development & contributing
 
-```bash
-# Clone and install
-git clone https://github.com/rhoades-brown/obsidian-github.git
-cd obsidian-github
-npm install
-
-# Build
-npm run build
-
-# Run tests
-npm test
-
-# Watch mode (rebuilds on file changes)
-npm run dev
-```
-
-### Project Structure
-
-```text
-obsidian-github/
-├── main.ts              # Plugin entry point
-├── src/
-│   ├── services/        # Core services (GitHub API, Sync, Logger)
-│   ├── views/           # UI components (DiffView, SyncView)
-│   └── utils/           # Utility functions (file, diff, encoding)
-├── tests/               # Jest test suites
-└── styles.css           # Plugin styles
-```
+See [DEVELOPMENT.md](DEVELOPMENT.md) for build instructions, project structure, conventional commit guidelines, and the automated versioning workflow.
 
 ## Troubleshooting
 
@@ -209,18 +182,6 @@ obsidian-github/
 2. Set log level to "Debug" for verbose output
 3. Open the debug console (macOS → cmd+option+i; Windows → ctrl+shift+i) to see real-time logs
 4. Or click "View Logs" in settings to see recent entries
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests (`npm test`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
 
 ## License
 
