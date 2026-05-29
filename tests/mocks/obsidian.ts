@@ -159,7 +159,13 @@ export class PluginSettingTab {
     constructor(public app: App, public plugin: Plugin) {}
     display(): void {}
     hide(): void {}
+    getSettingDefinitions(): any[] { return []; }
+    getControlValue(_key: string): unknown { return undefined; }
+    setControlValue(_key: string, _value: unknown): void {}
+    update(): void {}
 }
+
+export type SettingDefinitionItem = any;
 
 export class Setting {
     constructor(public containerEl: HTMLElement) {}

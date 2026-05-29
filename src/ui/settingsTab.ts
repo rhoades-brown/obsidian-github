@@ -1,12 +1,45 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
+import type { SettingDefinitionItem } from 'obsidian';
 import type { GitHubRepo } from '../services/githubService';
 import { LogLevel } from '../services/loggerService';
-import { AdditionalRepoConfig, ConflictResolution } from '../types/settings';
+import { AdditionalRepoConfig } from '../types/settings';
 import { LogViewerModal } from './modals/LogViewerModal';
 import type GitHubOctokitPlugin from '../../main';
 
+// ============================================================================
+// Dot-notation helpers for nested settings
+// ============================================================================
+
+function getPath(obj: Record<string, unknown>, path: string): unknown {
+	let cursor: unknown = obj;
+	for (const part of path.split('.')) {
+		if (cursor === null || typeof cursor !== 'object') return undefined;
+		cursor = (cursor as Record<string, unknown>)[part];
+	}
+	return cursor;
+}
+
+function setPath(obj: Record<string, unknown>, path: string, value: unknown): void {
+	const parts = path.split('.');
+	const last = parts.pop()!;
+	let cursor: Record<string, unknown> = obj;
+	for (const part of parts) {
+		let next = cursor[part];
+		if (next === null || typeof next !== 'object') {
+			next = {};
+			cursor[part] = next;
+		}
+		cursor = next as Record<string, unknown>;
+	}
+	cursor[last] = value;
+}
+
 /**
- * Settings tab for the GitHub Octokit plugin
+ * Settings tab for the GitHub Octokit plugin.
+ *
+ * Uses the declarative settings API introduced in Obsidian 1.13.0.
+ * Settings are defined via getSettingDefinitions() and the framework
+ * handles rendering, search indexing, and auto-save.
  */
 export class GitHubOctokitSettingTab extends PluginSettingTab {
 	plugin: GitHubOctokitPlugin;
@@ -17,161 +50,207 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
+	// ========================================================================
+	// Dot-notation read/write for nested settings (auth.token, etc.)
+	// ========================================================================
 
-		this.renderAuthSection(containerEl);
-		this.renderRepoSection(containerEl);
-		this.renderAdditionalReposSection(containerEl);
-		this.renderIgnorePatternsSection(containerEl);
-		this.renderSyncTriggersSection(containerEl);
-		this.renderCommitSection(containerEl);
-		this.renderConflictSection(containerEl);
-		this.renderUISection(containerEl);
-		this.renderLoggingSection(containerEl);
+	getControlValue(key: string): unknown {
+		return getPath(
+			this.plugin.settings as unknown as Record<string, unknown>,
+			key,
+		);
 	}
 
-	private renderAuthSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('GitHub authentication').setHeading();
-
-		// Connection status
-		const statusEl = containerEl.createDiv({ cls: 'github-octokit-status' });
-		this.updateConnectionStatus(statusEl);
-
-		new Setting(containerEl)
-			.setName('Personal access token')
-			.setDesc('Personal access token with repo access. Create one in your account developer settings.')
-			.addText(text => {
-				text
-					.setPlaceholder('Paste token here')
-					.setValue(this.plugin.settings.auth.token)
-					.onChange(async (value) => {
-						this.plugin.settings.auth.token = value;
-						this.plugin.settings.auth.tokenValidated = false;
-						await this.plugin.saveSettings();
-					});
-				text.inputEl.type = 'password';
-			})
-			.addButton(button => button
-				.setButtonText('Connect')
-				.setCta()
-				.onClick(async () => {
-					button.setButtonText('Connecting...');
-					button.setDisabled(true);
-
-					const success = await this.plugin.validateAndConnect();
-
-					if (success) {
-						new Notice(`Connected to GitHub as ${this.plugin.githubService.user?.login}`);
-						await this.loadRepositories();
-					} else {
-						new Notice('Failed to connect to GitHub. Check your token.');
-					}
-
-					// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
-					this.display();
-				}));
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		setPath(
+			this.plugin.settings as unknown as Record<string, unknown>,
+			key,
+			value,
+		);
+		await this.plugin.saveData(this.plugin.settings);
 	}
 
-	private renderRepoSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Repository').setHeading();
+	// ========================================================================
+	// Declarative definitions
+	// ========================================================================
 
-		const repoSetting = new Setting(containerEl)
-			.setName('Repository')
-			.setDesc('Select a repository to sync with');
-
-		if (this.plugin.settings.auth.tokenValidated) {
-			repoSetting.addDropdown(async dropdown => {
-				dropdown.addOption('', 'Select a repository...');
-
-				if (this.repositories.length === 0) {
-					await this.loadRepositories();
-				}
-
-				for (const repo of this.repositories) {
-					dropdown.addOption(repo.fullName, repo.fullName);
-				}
-
-				dropdown.setValue(this.plugin.settings.repo
-					? `${this.plugin.settings.repo.owner}/${this.plugin.settings.repo.name}`
-					: '');
-
-				dropdown.onChange(async (value) => {
-					if (value) {
-						const repo = this.repositories.find(r => r.fullName === value);
-						if (repo) {
-							this.plugin.settings.repo = {
-								owner: repo.owner,
-								name: repo.name,
-								branch: repo.defaultBranch,
-								defaultBranch: repo.defaultBranch,
-								isPrivate: repo.isPrivate,
-								url: repo.url,
-							};
-							await this.plugin.saveSettings();
-							this.plugin.updateStatusBar();
-							// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
-							this.display();
-						}
-					} else {
-						this.plugin.settings.repo = null;
-						await this.plugin.saveSettings();
-						this.plugin.updateStatusBar();
-					}
-				});
-			});
-		} else {
-			repoSetting.addDropdown(dropdown => dropdown
-				.addOption('', 'Connect to GitHub first...')
-				.setDisabled(true));
-		}
-
-		if (this.plugin.settings.repo) {
-			new Setting(containerEl)
-				.setName('Branch')
-				.setDesc('Branch to sync with')
-				.addText(text => text
-					.setPlaceholder('Main')
-					.setValue(this.plugin.settings.repo?.branch ?? 'main')
-					.onChange(async (value) => {
-						if (this.plugin.settings.repo) {
-							this.plugin.settings.repo.branch = value || 'main';
-							await this.plugin.saveSettings();
-						}
-					}));
-		}
-
-		new Setting(containerEl)
-			.setName('Subfolder path')
-			.setDesc('Optional: sync vault to a subfolder in the repo (e.g., "notes/Obsidian")')
-			.addText(text => text
-				.setPlaceholder('/')
-				.setValue(this.plugin.settings.subfolderPath)
-				.onChange(async (value) => {
-					this.plugin.settings.subfolderPath = value;
-					await this.plugin.saveSettings();
-				}));
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [
+			...this.authDefinitions(),
+			...this.repoDefinitions(),
+			this.additionalReposDefinition(),
+			this.ignorePatternsDefinition(),
+			...this.syncBehaviorDefinitions(),
+			...this.commitDefinitions(),
+			...this.conflictDefinitions(),
+			...this.uiDefinitions(),
+			...this.loggingDefinitions(),
+		];
 	}
 
-	private renderAdditionalReposSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Additional repositories').setHeading();
-		new Setting(containerEl)
-			.setDesc('Sync additional GitHub repositories into specific vault directories. Each repo is synced independently.');
+	// ========================================================================
+	// Authentication
+	// ========================================================================
 
-		// Render existing additional repos
-		for (const repoConfig of this.plugin.settings.additionalRepos) {
-			this.renderAdditionalRepoEntry(containerEl, repoConfig);
-		}
+	private authDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				type: 'group',
+				heading: 'GitHub authentication',
+				items: [
+					{
+						name: 'Connection status',
+						render: (setting) => {
+							const statusEl = setting.settingEl.createDiv({ cls: 'github-octokit-status' });
+							this.updateConnectionStatus(statusEl);
+							setting.settingEl.prepend(statusEl);
+							setting.settingEl.querySelector('.setting-item-info')?.remove();
+							setting.settingEl.querySelector('.setting-item-control')?.remove();
+						},
+					},
+					{
+						name: 'Personal access token',
+						desc: 'Personal access token with repo access. Create one in your account developer settings.',
+						render: (setting) => {
+							setting
+								.addText(text => {
+									text
+										.setPlaceholder('Paste token here')
+										.setValue(this.plugin.settings.auth.token)
+										.onChange(async (value) => {
+											this.plugin.settings.auth.token = value;
+											this.plugin.settings.auth.tokenValidated = false;
+											await this.plugin.saveSettings();
+										});
+									text.inputEl.type = 'password';
+								})
+								.addButton(button => button
+									.setButtonText('Connect')
+									.setCta()
+									.onClick(async () => {
+										button.setButtonText('Connecting...');
+										button.setDisabled(true);
 
-		// Add new repo button
-		new Setting(containerEl)
-			.setName('Add repository')
-			.addButton(button => button
-				.setButtonText('Add')
-				.setCta()
-				.onClick(async () => {
-					const newRepo: AdditionalRepoConfig = {
+										const success = await this.plugin.validateAndConnect();
+
+										if (success) {
+											new Notice(`Connected to GitHub as ${this.plugin.githubService.user?.login}`);
+											await this.loadRepositories();
+										} else {
+											new Notice('Failed to connect to GitHub. Check your token.');
+										}
+
+										this.update();
+									}));
+						},
+					},
+				],
+			},
+		];
+	}
+
+	// ========================================================================
+	// Repository
+	// ========================================================================
+
+	private repoDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				type: 'group',
+				heading: 'Repository',
+				items: [
+					{
+						name: 'Repository',
+						desc: 'Select a repository to sync with',
+						render: (setting) => {
+							if (this.plugin.settings.auth.tokenValidated) {
+								setting.addDropdown(async dropdown => {
+									dropdown.addOption('', 'Select a repository...');
+
+									if (this.repositories.length === 0) {
+										await this.loadRepositories();
+									}
+
+									for (const repo of this.repositories) {
+										dropdown.addOption(repo.fullName, repo.fullName);
+									}
+
+									dropdown.setValue(this.plugin.settings.repo
+										? `${this.plugin.settings.repo.owner}/${this.plugin.settings.repo.name}`
+										: '');
+
+									dropdown.onChange(async (value) => {
+										if (value) {
+											const repo = this.repositories.find(r => r.fullName === value);
+											if (repo) {
+												this.plugin.settings.repo = {
+													owner: repo.owner,
+													name: repo.name,
+													branch: repo.defaultBranch,
+													defaultBranch: repo.defaultBranch,
+													isPrivate: repo.isPrivate,
+													url: repo.url,
+												};
+												await this.plugin.saveSettings();
+												this.plugin.updateStatusBar();
+												this.update();
+											}
+										} else {
+											this.plugin.settings.repo = null;
+											await this.plugin.saveSettings();
+											this.plugin.updateStatusBar();
+										}
+									});
+								});
+							} else {
+								setting.addDropdown(dropdown => dropdown
+									.addOption('', 'Connect to GitHub first...')
+									.setDisabled(true));
+							}
+						},
+					},
+					{
+						name: 'Branch',
+						desc: 'Branch to sync with',
+						visible: () => this.plugin.settings.repo !== null,
+						render: (setting) => {
+							setting.addText(text => text
+								.setPlaceholder('Main')
+								.setValue(this.plugin.settings.repo?.branch ?? 'main')
+								.onChange(async (value) => {
+									if (this.plugin.settings.repo) {
+										this.plugin.settings.repo.branch = value || 'main';
+										await this.plugin.saveSettings();
+									}
+								}));
+						},
+					},
+					{
+						name: 'Subfolder path',
+						desc: 'Optional: sync vault to a subfolder in the repo (e.g., "notes/Obsidian")',
+						control: { type: 'text', key: 'subfolderPath', placeholder: '/' },
+					},
+				],
+			},
+		];
+	}
+
+	// ========================================================================
+	// Additional repositories
+	// ========================================================================
+
+	private additionalReposDefinition(): SettingDefinitionItem {
+		const repos = this.plugin.settings.additionalRepos;
+
+		return {
+			type: 'list',
+			heading: 'Additional repositories',
+			cls: 'github-octokit-additional-repos',
+			emptyState: 'No additional repositories configured.',
+			addItem: {
+				name: 'Add repository',
+				action: () => {
+					repos.push({
 						id: this.generateId(),
 						owner: '',
 						repo: '',
@@ -182,137 +261,142 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 						subfolderPath: '',
 						ignorePatterns: [],
 						enabled: true,
-					};
-					this.plugin.settings.additionalRepos.push(newRepo);
-					await this.plugin.saveSettings();
-					// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
-					this.display();
-				}));
+					});
+					void this.plugin.saveSettings().then(() => this.update());
+				},
+			},
+			onDelete: (idx: number) => {
+				repos.splice(idx, 1);
+				void this.plugin.saveSettings().then(() =>
+					this.plugin.initializeAdditionalRepos().then(() => this.update()),
+				);
+			},
+			items: repos.map((repoConfig) => ({
+				type: 'page' as const,
+				name: repoConfig.owner && repoConfig.repo
+					? `${repoConfig.owner}/${repoConfig.repo}`
+					: 'New repository',
+				desc: repoConfig.enabled ? 'Enabled' : 'Disabled',
+				items: this.additionalRepoPageItems(repoConfig),
+			})),
+		};
 	}
 
-	private renderAdditionalRepoEntry(containerEl: HTMLElement, repoConfig: AdditionalRepoConfig): void {
-		const repoContainer = containerEl.createDiv({ cls: 'github-octokit-additional-repo' });
-		const index = this.plugin.settings.additionalRepos.indexOf(repoConfig);
-
-		// Header with repo name and controls
-		const headerLabel = repoConfig.owner && repoConfig.repo
-			? `${repoConfig.owner}/${repoConfig.repo}`
-			: 'New repository';
-
-		new Setting(repoContainer)
-			.setName(headerLabel)
-			.addToggle(toggle => toggle
-				.setValue(repoConfig.enabled)
-				.setTooltip('Enable or disable this repository')
-				.onChange(async (value) => {
-					repoConfig.enabled = value;
-					await this.plugin.saveSettings();
-					await this.plugin.initializeAdditionalRepos();
-				}))
-			.addButton(button => button
-				.setIcon('trash')
-				.setTooltip('Remove repository')
-				.onClick(async () => {
-					this.plugin.settings.additionalRepos.splice(index, 1);
-					await this.plugin.saveSettings();
-					await this.plugin.initializeAdditionalRepos();
-					// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
-					this.display();
-				}));
-
-		// Owner
-		new Setting(repoContainer)
-			.setName('Owner')
-			.setDesc('GitHub user or organization')
-			.addText(text => text
-				.setPlaceholder('Owner')
-				.setValue(repoConfig.owner)
-				.onChange(async (value) => {
-					repoConfig.owner = value.trim();
-					await this.plugin.saveSettings();
-				}));
-
-		// Repo name
-		new Setting(repoContainer)
-			.setName('Repository name')
-			.addText(text => text
-				.setPlaceholder('Repo name')
-				.setValue(repoConfig.repo)
-				.onChange(async (value) => {
-					repoConfig.repo = value.trim();
-					await this.plugin.saveSettings();
-				}));
-
-		// Branch
-		new Setting(repoContainer)
-			.setName('Branch')
-			.addText(text => text
-				.setPlaceholder('Main')
-				.setValue(repoConfig.branch)
-				.onChange(async (value) => {
-					repoConfig.branch = value.trim() || 'main';
-					await this.plugin.saveSettings();
-				}));
-
-		// Local path
-		new Setting(repoContainer)
-			.setName('Vault directory')
-			.setDesc('Directory in the vault to sync this repo into')
-			.addText(text => text
-				.setPlaceholder('My other repo')
-				.setValue(repoConfig.localPath)
-				.onChange(async (value) => {
-					const trimmed = value.trim();
-					// Validate no overlap with other repos
-					const overlap = this.validateLocalPath(trimmed, repoConfig.id);
-					if (overlap) {
-						new Notice(overlap);
-						return;
-					}
-					repoConfig.localPath = trimmed;
-					await this.plugin.saveSettings();
-					await this.plugin.initializeAdditionalRepos();
-				}));
-
-		// Token settings
-		new Setting(repoContainer)
-			.setName('Use main token')
-			.setDesc('Use the same token as the main repository')
-			.addToggle(toggle => toggle
-				.setValue(repoConfig.useMainToken)
-				.onChange(async (value) => {
-					repoConfig.useMainToken = value;
-					await this.plugin.saveSettings();
-					// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
-					this.display();
-				}));
-
-		if (!repoConfig.useMainToken) {
-			new Setting(repoContainer)
-				.setName('Personal access token')
-				.addText(text => {
-					text.inputEl.type = 'password';
-					text
-						.setPlaceholder('Paste token here')
-						.setValue(repoConfig.token)
+	private additionalRepoPageItems(repoConfig: AdditionalRepoConfig): SettingDefinitionItem[] {
+		return [
+			{
+				name: 'Enabled',
+				desc: 'Enable or disable this repository',
+				render: (setting) => {
+					setting.addToggle(toggle => toggle
+						.setValue(repoConfig.enabled)
 						.onChange(async (value) => {
-							repoConfig.token = value;
+							repoConfig.enabled = value;
 							await this.plugin.saveSettings();
-						});
-				});
-		}
-
-		// Subfolder path
-		new Setting(repoContainer)
-			.setName('Subfolder path')
-			.setDesc('Optional: sync a subfolder of the remote repo')
-			.addText(text => text
-				.setPlaceholder('E.g., docs/notes')
-				.setValue(repoConfig.subfolderPath)
-				.onChange(async (value) => {
-					repoConfig.subfolderPath = value.trim();
-					await this.plugin.saveSettings();
-				}));
+							await this.plugin.initializeAdditionalRepos();
+						}));
+				},
+			},
+			{
+				name: 'Owner',
+				desc: 'GitHub user or organization',
+				render: (setting) => {
+					setting.addText(text => text
+						.setPlaceholder('Owner')
+						.setValue(repoConfig.owner)
+						.onChange(async (value) => {
+							repoConfig.owner = value.trim();
+							await this.plugin.saveSettings();
+						}));
+				},
+			},
+			{
+				name: 'Repository name',
+				render: (setting) => {
+					setting.addText(text => text
+						.setPlaceholder('Repo name')
+						.setValue(repoConfig.repo)
+						.onChange(async (value) => {
+							repoConfig.repo = value.trim();
+							await this.plugin.saveSettings();
+						}));
+				},
+			},
+			{
+				name: 'Branch',
+				render: (setting) => {
+					setting.addText(text => text
+						.setPlaceholder('Main')
+						.setValue(repoConfig.branch)
+						.onChange(async (value) => {
+							repoConfig.branch = value.trim() || 'main';
+							await this.plugin.saveSettings();
+						}));
+				},
+			},
+			{
+				name: 'Vault directory',
+				desc: 'Directory in the vault to sync this repo into',
+				render: (setting) => {
+					setting.addText(text => text
+						.setPlaceholder('My other repo')
+						.setValue(repoConfig.localPath)
+						.onChange(async (value) => {
+							const trimmed = value.trim();
+							const overlap = this.validateLocalPath(trimmed, repoConfig.id);
+							if (overlap) {
+								new Notice(overlap);
+								return;
+							}
+							repoConfig.localPath = trimmed;
+							await this.plugin.saveSettings();
+							await this.plugin.initializeAdditionalRepos();
+						}));
+				},
+			},
+			{
+				name: 'Use main token',
+				desc: 'Use the same token as the main repository',
+				render: (setting) => {
+					setting.addToggle(toggle => toggle
+						.setValue(repoConfig.useMainToken)
+						.onChange(async (value) => {
+							repoConfig.useMainToken = value;
+							await this.plugin.saveSettings();
+							this.update();
+						}));
+				},
+			},
+			{
+				name: 'Personal access token',
+				visible: () => !repoConfig.useMainToken,
+				render: (setting) => {
+					setting.addText(text => {
+						text.inputEl.type = 'password';
+						text
+							.setPlaceholder('Paste token here')
+							.setValue(repoConfig.token)
+							.onChange(async (value) => {
+								repoConfig.token = value;
+								await this.plugin.saveSettings();
+							});
+					});
+				},
+			},
+			{
+				name: 'Subfolder path',
+				desc: 'Optional: sync a subfolder of the remote repo',
+				render: (setting) => {
+					setting.addText(text => text
+						.setPlaceholder('E.g., docs/notes')
+						.setValue(repoConfig.subfolderPath)
+						.onChange(async (value) => {
+							repoConfig.subfolderPath = value.trim();
+							await this.plugin.saveSettings();
+						}));
+				},
+			},
+		];
 	}
 
 	/**
@@ -345,257 +429,297 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 		return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
 	}
 
-	private renderIgnorePatternsSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Ignore patterns').setHeading();
-		new Setting(containerEl)
-			.setDesc(`Files matching these patterns will be excluded from sync. Use glob patterns (e.g., "*.tmp", "${this.plugin.app.vault.configDir}/workspace.json").`);
+	// ========================================================================
+	// Ignore patterns
+	// ========================================================================
 
-		const patternsContainer = containerEl.createDiv({ cls: 'github-octokit-ignore-patterns' });
+	private ignorePatternsDefinition(): SettingDefinitionItem {
+		const patterns = this.plugin.settings.ignorePatterns;
 
-		this.plugin.settings.ignorePatterns.forEach((pattern, index) => {
-			new Setting(patternsContainer)
-				.setName(pattern)
-				.addButton(button => button
-					.setIcon('trash')
-					.setTooltip('Remove pattern')
-					.onClick(async () => {
-						this.plugin.settings.ignorePatterns.splice(index, 1);
-						await this.plugin.saveSettings();
-						this.plugin.syncService.configure(
-							this.plugin.getMainRepoIgnorePatterns(),
-							this.plugin.settings.subfolderPath,
-							this.plugin.settings.syncConfiguration
-						);
-						// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
-						this.display();
-					}));
-		});
-
-		new Setting(containerEl)
-			.setName('Add pattern')
-			.setDesc('Add a new ignore pattern')
-			.addText(text => text
-				.setPlaceholder(`${this.plugin.app.vault.configDir}/cache/**`)
-				.onChange(() => {}))
-			.addButton(button => button
-				.setButtonText('Add')
-				.onClick(async () => {
-					const input = containerEl.querySelector('.github-octokit-ignore-patterns + .setting-item input') as HTMLInputElement;
-					const value = input?.value?.trim();
-					if (value && !this.plugin.settings.ignorePatterns.includes(value)) {
-						this.plugin.settings.ignorePatterns.push(value);
-						await this.plugin.saveSettings();
-						this.plugin.syncService.configure(
-							this.plugin.getMainRepoIgnorePatterns(),
-							this.plugin.settings.subfolderPath,
-							this.plugin.settings.syncConfiguration
-						);
-						// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
-						this.display();
-					}
-				}));
-	}
-
-	private renderSyncTriggersSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Sync behavior').setHeading();
-
-		const configDir = this.plugin.app.vault.configDir;
-		new Setting(containerEl)
-			.setName('Sync configuration folder')
-			.setDesc(`Include the ${configDir} folder in sync. When disabled, all configuration files are excluded.`)
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.syncConfiguration)
-				.onChange(async (value) => {
-					this.plugin.settings.syncConfiguration = value;
-					await this.plugin.saveSettings();
+		return {
+			type: 'list',
+			heading: 'Ignore patterns',
+			cls: 'github-octokit-ignore-patterns',
+			emptyState: 'No ignore patterns configured.',
+			addItem: {
+				name: 'Add pattern',
+				action: () => {
+					patterns.push('');
+					void this.plugin.saveSettings().then(() => this.update());
+				},
+			},
+			onDelete: (idx: number) => {
+				patterns.splice(idx, 1);
+				void this.plugin.saveSettings().then(() => {
 					this.plugin.syncService.configure(
 						this.plugin.getMainRepoIgnorePatterns(),
 						this.plugin.settings.subfolderPath,
 						this.plugin.settings.syncConfiguration
 					);
-				}));
-
-		new Setting(containerEl)
-			.setDesc('Choose when the plugin should automatically sync with GitHub. Enable multiple triggers as needed.');
-
-		new Setting(containerEl)
-			.setName('Sync on file save')
-			.setDesc('Automatically sync when you save a file')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.syncSchedule.syncOnSave)
-				.onChange(async (value) => {
-					this.plugin.settings.syncSchedule.syncOnSave = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('Sync on interval')
-			.setDesc('Automatically sync at regular intervals')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.syncSchedule.syncOnInterval)
-				.onChange(async (value) => {
-					this.plugin.settings.syncSchedule.syncOnInterval = value;
-					await this.plugin.saveSettings();
-					// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
-					this.display();
-				}));
-
-		if (this.plugin.settings.syncSchedule.syncOnInterval) {
-			new Setting(containerEl)
-				.setName('Sync interval (minutes)')
-				.setDesc('How often to sync with GitHub')
-				.addSlider(slider => slider
-					.setLimits(5, 120, 5)
-					.setValue(this.plugin.settings.syncSchedule.intervalMinutes)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.syncSchedule.intervalMinutes = value;
-						await this.plugin.saveSettings();
-					}));
-		}
-
-		new Setting(containerEl)
-			.setName('Sync on startup')
-			.setDesc('Automatically sync when Obsidian starts')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.syncSchedule.syncOnStartup)
-				.onChange(async (value) => {
-					this.plugin.settings.syncSchedule.syncOnStartup = value;
-					await this.plugin.saveSettings();
-				}));
+					this.update();
+				});
+			},
+			items: patterns.map((pattern, idx) => ({
+				name: pattern || 'New pattern',
+				render: (setting: Setting) => {
+					setting.addText(text => text
+						.setPlaceholder(`${this.plugin.app.vault.configDir}/cache/**`)
+						.setValue(pattern)
+						.onChange(async (value) => {
+							patterns[idx] = value.trim();
+							await this.plugin.saveSettings();
+							this.plugin.syncService.configure(
+								this.plugin.getMainRepoIgnorePatterns(),
+								this.plugin.settings.subfolderPath,
+								this.plugin.settings.syncConfiguration
+							);
+						}));
+				},
+			})),
+		};
 	}
 
-	private renderCommitSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Commit messages').setHeading();
+	// ========================================================================
+	// Sync behavior
+	// ========================================================================
 
-		new Setting(containerEl)
-			.setName('Commit message template')
-			.setDesc('Template for commit messages. Use {date}, {files}, {action}')
-			.addText(text => text
-				.setPlaceholder('Vault sync: {date}')
-				.setValue(this.plugin.settings.commitConfig.messageTemplate)
-				.onChange(async (value) => {
-					this.plugin.settings.commitConfig.messageTemplate = value;
-					await this.plugin.saveSettings();
-				}));
+	private syncBehaviorDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				type: 'group',
+				heading: 'Sync behavior',
+				items: [
+					{
+						name: 'Sync configuration folder',
+						desc: `Include the ${this.plugin.app.vault.configDir} folder in sync. When disabled, all configuration files are excluded.`,
+						render: (setting) => {
+							setting.addToggle(toggle => toggle
+								.setValue(this.plugin.settings.syncConfiguration)
+								.onChange(async (value) => {
+									this.plugin.settings.syncConfiguration = value;
+									await this.plugin.saveSettings();
+									this.plugin.syncService.configure(
+										this.plugin.getMainRepoIgnorePatterns(),
+										this.plugin.settings.subfolderPath,
+										this.plugin.settings.syncConfiguration
+									);
+								}));
+						},
+					},
+					{
+						name: 'Sync on file save',
+						desc: 'Automatically sync when you save a file',
+						control: { type: 'toggle', key: 'syncSchedule.syncOnSave' },
+					},
+					{
+						name: 'Sync on interval',
+						desc: 'Automatically sync at regular intervals',
+						render: (setting) => {
+							setting.addToggle(toggle => toggle
+								.setValue(this.plugin.settings.syncSchedule.syncOnInterval)
+								.onChange(async (value) => {
+									this.plugin.settings.syncSchedule.syncOnInterval = value;
+									await this.plugin.saveSettings();
+									this.update();
+								}));
+						},
+					},
+					{
+						name: 'Sync interval (minutes)',
+						desc: 'How often to sync with GitHub',
+						visible: () => this.plugin.settings.syncSchedule.syncOnInterval,
+						control: {
+							type: 'slider',
+							key: 'syncSchedule.intervalMinutes',
+							min: 5,
+							max: 120,
+							step: 5,
+						},
+					},
+					{
+						name: 'Sync on startup',
+						desc: 'Automatically sync when Obsidian starts',
+						control: { type: 'toggle', key: 'syncSchedule.syncOnStartup' },
+					},
+				],
+			},
+		];
 	}
 
-	private renderConflictSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Conflict resolution').setHeading();
+	// ========================================================================
+	// Commit messages
+	// ========================================================================
 
-		new Setting(containerEl)
-			.setName('Default resolution')
-			.setDesc('How to handle conflicts when the same file is changed locally and remotely')
-			.addDropdown(dropdown => dropdown
-				.addOption('manual', 'Ask me each time')
-				.addOption('keep-local', 'Keep local version')
-				.addOption('keep-remote', 'Keep remote version')
-				.addOption('keep-both', 'Keep both (rename)')
-				.setValue(this.plugin.settings.defaultConflictResolution)
-				.onChange(async (value: string) => {
-					this.plugin.settings.defaultConflictResolution = value as ConflictResolution;
-					await this.plugin.saveSettings();
-				}));
+	private commitDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				type: 'group',
+				heading: 'Commit messages',
+				items: [
+					{
+						name: 'Commit message template',
+						desc: 'Template for commit messages. Use {date}, {files}, {action}',
+						control: {
+							type: 'text',
+							key: 'commitConfig.messageTemplate',
+							placeholder: 'Vault sync: {date}',
+						},
+					},
+				],
+			},
+		];
 	}
 
-	private renderUISection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('UI preferences').setHeading();
+	// ========================================================================
+	// Conflict resolution
+	// ========================================================================
 
-		new Setting(containerEl)
-			.setName('Show status bar')
-			.setDesc('Show sync status in the status bar')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showStatusBar)
-				.onChange(async (value) => {
-					this.plugin.settings.showStatusBar = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('Show notifications')
-			.setDesc('Show notifications for sync events')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showNotifications)
-				.onChange(async (value) => {
-					this.plugin.settings.showNotifications = value;
-					await this.plugin.saveSettings();
-				}));
+	private conflictDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				type: 'group',
+				heading: 'Conflict resolution',
+				items: [
+					{
+						name: 'Default resolution',
+						desc: 'How to handle conflicts when the same file is changed locally and remotely',
+						control: {
+							type: 'dropdown',
+							key: 'defaultConflictResolution',
+							options: {
+								'manual': 'Ask me each time',
+								'keep-local': 'Keep local version',
+								'keep-remote': 'Keep remote version',
+								'keep-both': 'Keep both (rename)',
+							},
+						},
+					},
+				],
+			},
+		];
 	}
 
-	private renderLoggingSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName('Logging').setHeading();
+	// ========================================================================
+	// UI preferences
+	// ========================================================================
 
-		new Setting(containerEl)
-			.setName('Enable logging')
-			.setDesc('Log sync operations for debugging')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.logging.enabled)
-				.onChange(async (value) => {
-					this.plugin.settings.logging.enabled = value;
-					this.plugin.logger.configure({ enabled: value });
-					await this.plugin.saveSettings();
-				}));
+	private uiDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				type: 'group',
+				heading: 'UI preferences',
+				items: [
+					{
+						name: 'Show status bar',
+						desc: 'Show sync status in the status bar',
+						control: { type: 'toggle', key: 'showStatusBar' },
+					},
+					{
+						name: 'Show notifications',
+						desc: 'Show notifications for sync events',
+						control: { type: 'toggle', key: 'showNotifications' },
+					},
+				],
+			},
+		];
+	}
 
-		new Setting(containerEl)
-			.setName('Log level')
-			.setDesc('Minimum log level to record')
-			.addDropdown(dropdown => dropdown
-				.addOption('debug', 'Debug (verbose)')
-				.addOption('info', 'Info (normal)')
-				.addOption('warn', 'Warnings only')
-				.addOption('error', 'Errors only')
-				.setValue(this.plugin.settings.logging.level)
-				.onChange(async (value: string) => {
-					this.plugin.settings.logging.level = value as LogLevel;
-					this.plugin.logger.configure({ level: value as LogLevel });
-					await this.plugin.saveSettings();
-				}));
+	// ========================================================================
+	// Logging
+	// ========================================================================
 
-		new Setting(containerEl)
-			.setName('Persist logs to file')
-			.setDesc('Save logs to a file in your vault')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.logging.persistToFile)
-				.onChange(async (value) => {
-					this.plugin.settings.logging.persistToFile = value;
-					this.plugin.logger.configure({ persistToFile: value });
-					await this.plugin.saveSettings();
-				}));
-
-		if (this.plugin.settings.logging.persistToFile) {
-			new Setting(containerEl)
-				.setName('Log file path')
-				.setDesc('Path for the log file (relative to vault root)')
-				.addText(text => text
-					.setPlaceholder('Enter log file path')
-					.setValue(this.plugin.settings.logging.logFilePath)
-					.onChange(async (value) => {
-						this.plugin.settings.logging.logFilePath = value || '.github-sync.log';
-						this.plugin.logger.configure({ logFilePath: value || '.github-sync.log' });
-						await this.plugin.saveSettings();
-					}));
-		}
-
-		new Setting(containerEl)
-			.setName('View logs')
-			.setDesc('View recent log entries')
-			.addButton(button => button
-				.setButtonText('View logs')
-				.onClick(() => {
-					new LogViewerModal(this.app, this.plugin.logger).open();
-				}));
-
-		new Setting(containerEl)
-			.setName('Clear logs')
-			.setDesc('Clear all log entries from memory')
-			.addButton(button => button
-				.setButtonText('Clear')
-				// eslint-disable-next-line @typescript-eslint/no-deprecated -- setDestructive requires minAppVersion 1.13.0
-				.setWarning()
-				.onClick(() => {
-					this.plugin.logger.clear();
-					new Notice('Logs cleared');
-				}));
+	private loggingDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				type: 'group',
+				heading: 'Logging',
+				items: [
+					{
+						name: 'Enable logging',
+						desc: 'Log sync operations for debugging',
+						render: (setting) => {
+							setting.addToggle(toggle => toggle
+								.setValue(this.plugin.settings.logging.enabled)
+								.onChange(async (value) => {
+									this.plugin.settings.logging.enabled = value;
+									this.plugin.logger.configure({ enabled: value });
+									await this.plugin.saveSettings();
+								}));
+						},
+					},
+					{
+						name: 'Log level',
+						desc: 'Minimum log level to record',
+						render: (setting) => {
+							setting.addDropdown(dropdown => dropdown
+								.addOption('debug', 'Debug (verbose)')
+								.addOption('info', 'Info (normal)')
+								.addOption('warn', 'Warnings only')
+								.addOption('error', 'Errors only')
+								.setValue(this.plugin.settings.logging.level)
+								.onChange(async (value: string) => {
+									this.plugin.settings.logging.level = value as LogLevel;
+									this.plugin.logger.configure({ level: value as LogLevel });
+									await this.plugin.saveSettings();
+								}));
+						},
+					},
+					{
+						name: 'Persist logs to file',
+						desc: 'Save logs to a file in your vault',
+						render: (setting) => {
+							setting.addToggle(toggle => toggle
+								.setValue(this.plugin.settings.logging.persistToFile)
+								.onChange(async (value) => {
+									this.plugin.settings.logging.persistToFile = value;
+									this.plugin.logger.configure({ persistToFile: value });
+									await this.plugin.saveSettings();
+									this.update();
+								}));
+						},
+					},
+					{
+						name: 'Log file path',
+						desc: 'Path for the log file (relative to vault root)',
+						visible: () => this.plugin.settings.logging.persistToFile,
+						render: (setting) => {
+							setting.addText(text => text
+								.setPlaceholder('Enter log file path')
+								.setValue(this.plugin.settings.logging.logFilePath)
+								.onChange(async (value) => {
+									this.plugin.settings.logging.logFilePath = value || '.github-sync.log';
+									this.plugin.logger.configure({ logFilePath: value || '.github-sync.log' });
+									await this.plugin.saveSettings();
+								}));
+						},
+					},
+					{
+						name: 'View logs',
+						desc: 'View recent log entries',
+						render: (setting) => {
+							setting.addButton(button => button
+								.setButtonText('View logs')
+								.onClick(() => {
+									new LogViewerModal(this.app, this.plugin.logger).open();
+								}));
+						},
+					},
+					{
+						name: 'Clear logs',
+						desc: 'Clear all log entries from memory',
+						render: (setting) => {
+							setting.addButton(button => button
+								.setButtonText('Clear')
+								.setDestructive()
+								.onClick(() => {
+									this.plugin.logger.clear();
+									new Notice('Logs cleared');
+								}));
+						},
+					},
+				],
+			},
+		];
 	}
 
 	private updateConnectionStatus(containerEl: HTMLElement): void {
