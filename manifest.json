@@ -2,7 +2,7 @@
 	"id": "github-octokit",
 	"name": "GitHub Octokit Sync",
 	"version": "0.4.1",
-	"minAppVersion": "1.11.4",
+	"minAppVersion": "1.12.7",
 	"description": "Sync your vault with GitHub using the Octokit API.",
 	"author": "M Rhoades-Brown",
 	"authorUrl": "https://github.com/rhoades-brown",
