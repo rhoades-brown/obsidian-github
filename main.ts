@@ -602,7 +602,24 @@ export default class GitHubOctokitPlugin extends Plugin {
 		} else if (this.settings.auth.token) {
 			// Legacy: token still in data.json — migrate to SecretStorage
 			this.app.secretStorage.setSecret('github-pat', this.settings.auth.token);
-			// Clear from data.json on next save
+		}
+
+		// Migrate additional repo tokens to SecretStorage
+		let needsSave = false;
+		for (const repo of this.settings.additionalRepos) {
+			if (repo.useMainToken) continue;
+			const secretKey = `github-pat-${repo.id}`;
+			const repoSecret = this.app.secretStorage.getSecret(secretKey);
+			if (repoSecret) {
+				repo.token = repoSecret;
+			} else if (repo.token) {
+				this.app.secretStorage.setSecret(secretKey, repo.token);
+				needsSave = true;
+			}
+		}
+
+		// Clear legacy tokens from data.json if any were migrated
+		if (needsSave || (!storedSecret && this.settings.auth.token)) {
 			await this.saveSettings();
 		}
 	}
@@ -611,15 +628,24 @@ export default class GitHubOctokitPlugin extends Plugin {
 		// Preserve syncState when saving settings
 		const data = (await this.loadData() || {}) as PersistedPluginData;
 
-		// Persist token to SecretStorage, not data.json
+		// Persist main token to SecretStorage
 		if (this.settings.auth.token) {
 			this.app.secretStorage.setSecret('github-pat', this.settings.auth.token);
 		}
 
-		// Exclude token from persisted settings
+		// Persist additional repo tokens to SecretStorage
+		const cleanedRepos = this.settings.additionalRepos.map(repo => {
+			if (!repo.useMainToken && repo.token) {
+				this.app.secretStorage.setSecret(`github-pat-${repo.id}`, repo.token);
+			}
+			return { ...repo, token: '' };
+		});
+
+		// Exclude all tokens from persisted settings
 		const settingsToSave = {
 			...this.settings,
 			auth: { ...this.settings.auth, token: '' },
+			additionalRepos: cleanedRepos,
 		};
 
 		await this.saveData({
