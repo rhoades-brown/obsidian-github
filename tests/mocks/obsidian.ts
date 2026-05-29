@@ -1,8 +1,21 @@
 // Mock Obsidian module for testing
 
+export class SecretStorage {
+    private secrets: Map<string, string> = new Map();
+    setSecret(id: string, secret: string): void { this.secrets.set(id, secret); }
+    getSecret(id: string): string | null { return this.secrets.get(id) ?? null; }
+    listSecrets(): string[] { return Array.from(this.secrets.keys()); }
+}
+
 export class App {
     vault = new Vault();
     workspace = new Workspace();
+    secretStorage = new SecretStorage();
+    private localStorage: Map<string, string> = new Map();
+    loadLocalStorage(key: string): string | null { return this.localStorage.get(key) ?? null; }
+    saveLocalStorage(key: string, data: unknown | null): void {
+        if (data === null) { this.localStorage.delete(key); } else { this.localStorage.set(key, String(data)); }
+    }
 }
 
 export class Vault {

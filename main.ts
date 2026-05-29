@@ -593,13 +593,63 @@ export default class GitHubOctokitPlugin extends Plugin {
 		void _ignored; // intentionally unused - just extracting syncState from data
 		void _ignored2;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
+
+		// Migrate main token from plaintext data.json to SecretStorage
+		const storedSecret = this.app.secretStorage.getSecret('github-pat');
+		if (storedSecret) {
+			// Token already in SecretStorage — use it
+			this.settings.auth.token = storedSecret;
+		} else if (this.settings.auth.token) {
+			// Legacy: token still in data.json — migrate to SecretStorage
+			this.app.secretStorage.setSecret('github-pat', this.settings.auth.token);
+		}
+
+		// Migrate additional repo tokens to SecretStorage
+		let needsSave = false;
+		for (const repo of this.settings.additionalRepos) {
+			if (repo.useMainToken) continue;
+			const secretKey = `github-pat-${repo.id}`;
+			const repoSecret = this.app.secretStorage.getSecret(secretKey);
+			if (repoSecret) {
+				repo.token = repoSecret;
+			} else if (repo.token) {
+				this.app.secretStorage.setSecret(secretKey, repo.token);
+				needsSave = true;
+			}
+		}
+
+		// Clear legacy tokens from data.json if any were migrated
+		if (needsSave || (!storedSecret && this.settings.auth.token)) {
+			await this.saveSettings();
+		}
 	}
 
 	async saveSettings() {
 		// Preserve syncState when saving settings
 		const data = (await this.loadData() || {}) as PersistedPluginData;
-		await this.saveData({
+
+		// Persist main token to SecretStorage
+		if (this.settings.auth.token) {
+			this.app.secretStorage.setSecret('github-pat', this.settings.auth.token);
+		}
+
+		// Persist additional repo tokens to SecretStorage
+		const cleanedRepos = this.settings.additionalRepos.map(repo => {
+			if (!repo.useMainToken && repo.token) {
+				this.app.secretStorage.setSecret(`github-pat-${repo.id}`, repo.token);
+			}
+			return { ...repo, token: '' };
+		});
+
+		// Exclude all tokens from persisted settings
+		const settingsToSave = {
 			...this.settings,
+			auth: { ...this.settings.auth, token: '' },
+			additionalRepos: cleanedRepos,
+		};
+
+		await this.saveData({
+			...settingsToSave,
 			syncState: data.syncState,
 			additionalRepoStates: data.additionalRepoStates,
 		});
