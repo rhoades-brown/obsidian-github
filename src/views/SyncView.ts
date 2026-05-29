@@ -316,7 +316,7 @@ export class SyncView extends ItemView {
 
             await this.plugin.openDiffView(path, localContent, remoteContent);
         } catch (error) {
-            new Notice(`Failed to open diff: ${error}`);
+            new Notice(`Failed to open diff: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 

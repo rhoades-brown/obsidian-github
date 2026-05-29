@@ -1,18 +1,19 @@
-import tseslint from "@typescript-eslint/eslint-plugin";
-import tsparser from "@typescript-eslint/parser";
+import tseslint from "typescript-eslint";
 import { defineConfig } from "eslint/config";
 import obsidianmd from "eslint-plugin-obsidianmd";
 import globals from "globals";
 
 export default defineConfig([
-  ...obsidianmd.configs.recommended,
+  {
+    ignores: ["node_modules/**", "main.js", "*.mjs", "*.cjs", "tests/**", "eslint.config.js"],
+  },
   {
     files: ["**/*.ts"],
-    plugins: {
-      "@typescript-eslint": tseslint,
-    },
+    extends: [
+      ...obsidianmd.configs.recommended,
+      ...tseslint.configs.recommended,
+    ],
     languageOptions: {
-      parser: tsparser,
       parserOptions: { project: "./tsconfig.json" },
       globals: {
         ...globals.browser,
@@ -37,9 +38,6 @@ export default defineConfig([
       "@typescript-eslint/no-redundant-type-constituents": "error",
       "@typescript-eslint/require-await": "error",
     },
-  },
-  {
-    ignores: ["node_modules/**", "main.js", "*.mjs", "tests/**", "eslint.config.js", "jest.config.js"],
   },
 ]);
 

@@ -7,11 +7,17 @@ import { SyncView, SYNC_VIEW_TYPE } from './src/views/SyncView';
 import { GitHubOctokitSettingTab, SyncModal } from './src/ui';
 import { GitHubOctokitSettings, DEFAULT_SETTINGS } from './src/types/settings';
 
+/** Shape of the data persisted via loadData/saveData */
+interface PersistedPluginData extends Partial<GitHubOctokitSettings> {
+	syncState?: PersistedSyncState | null;
+	additionalRepoStates?: Record<string, PersistedSyncState>;
+}
+
 export default class GitHubOctokitPlugin extends Plugin {
-	settings: GitHubOctokitSettings;
-	githubService: GitHubService;
-	syncService: SyncService;
-	logger: LoggerService;
+	settings!: GitHubOctokitSettings;
+	githubService!: GitHubService;
+	syncService!: SyncService;
+	logger!: LoggerService;
 	private statusBarItem: HTMLElement | null = null;
 	private syncState: PersistedSyncState | null = null;
 	private syncIntervalId: number | null = null;
@@ -186,12 +192,12 @@ export default class GitHubOctokitPlugin extends Plugin {
 
 		// Sync on startup if enabled
 		if (this.settings.syncSchedule.syncOnStartup && this.githubService.isAuthenticated && this.settings.repo) {
-			setTimeout(() => { void this.performSync(); }, 3000); // Delay to let Obsidian fully load
+			window.setTimeout(() => { void this.performSync(); }, 3000); // Delay to let Obsidian fully load
 		}
 
 		// First-run setup notice
 		if (!this.settings.auth.token) {
-			setTimeout(() => {
+			window.setTimeout(() => {
 				new Notice(
 					'Welcome! Open settings to configure sync with your remote repository.',
 					15000
@@ -443,7 +449,7 @@ export default class GitHubOctokitPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		const data = await this.loadData() || {};
+		const data = (await this.loadData() || {}) as PersistedPluginData;
 		// Extract syncState before merging with defaults - syncState is separate from settings
 		const { syncState: _ignored, ...settingsData } = data;
 		void _ignored; // intentionally unused - just extracting syncState from data
@@ -452,18 +458,18 @@ export default class GitHubOctokitPlugin extends Plugin {
 
 	async saveSettings() {
 		// Preserve syncState when saving settings
-		const data = await this.loadData() || {};
+		const data = (await this.loadData() || {}) as PersistedPluginData;
 		await this.saveData({ ...this.settings, syncState: data.syncState });
 	}
 
 	async loadSyncState() {
-		const data = await this.loadData();
+		const data = await this.loadData() as PersistedPluginData | null;
 		this.syncState = data?.syncState || null;
 	}
 
 	async saveSyncState() {
 		// Preserve settings when saving syncState
-		const data = await this.loadData() || {};
+		const data = (await this.loadData() || {}) as PersistedPluginData;
 		data.syncState = this.syncState;
 		await this.saveData(data);
 	}

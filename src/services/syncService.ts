@@ -639,7 +639,7 @@ export class SyncService {
                         encoding: 'base64',
                     });
                 } catch (error) {
-                    errors.push(`Failed to read ${change.path}: ${error}`);
+                    errors.push(`Failed to read ${change.path}: ${error instanceof Error ? error.message : String(error)}`);
                 }
             } else if (change.status === 'deleted') {
                 // File was deleted locally - delete on remote
@@ -692,7 +692,7 @@ export class SyncService {
                 filesPushed: 0,
                 filesDeleted: 0,
                 conflicts: [],
-                errors: [...errors, `Batch commit failed: ${error}`],
+                errors: [...errors, `Batch commit failed: ${error instanceof Error ? error.message : String(error)}`],
             };
         }
     }
@@ -774,7 +774,7 @@ export class SyncService {
             return localChanged && !remoteChanged;
         });
 
-        let result: SyncResult = {
+        const result: SyncResult = {
             success: true,
             filesProcessed: 0,
             filesPulled: 0,

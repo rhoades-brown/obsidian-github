@@ -68,6 +68,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 						new Notice('Failed to connect to GitHub. Check your token.');
 					}
 
+					// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
 					this.display();
 				}));
 	}
@@ -109,6 +110,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 							};
 							await this.plugin.saveSettings();
 							this.plugin.updateStatusBar();
+							// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
 							this.display();
 						}
 					} else {
@@ -141,7 +143,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Subfolder path')
-			.setDesc('Optional: Sync vault to a subfolder in the repo (e.g., "notes/obsidian")')
+			.setDesc('Optional: sync vault to a subfolder in the repo (e.g., "notes/Obsidian")')
 			.addText(text => text
 				.setPlaceholder('/')
 				.setValue(this.plugin.settings.subfolderPath)
@@ -172,6 +174,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 							this.plugin.settings.subfolderPath,
 							this.plugin.settings.syncConfiguration
 						);
+						// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
 						this.display();
 					}));
 		});
@@ -195,6 +198,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 							this.plugin.settings.subfolderPath,
 							this.plugin.settings.syncConfiguration
 						);
+						// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
 						this.display();
 					}
 				}));
@@ -240,6 +244,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.syncSchedule.syncOnInterval = value;
 					await this.plugin.saveSettings();
+					// eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO: migrate to getSettingDefinitions
 					this.display();
 				}));
 
@@ -295,8 +300,8 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				.addOption('keep-remote', 'Keep remote version')
 				.addOption('keep-both', 'Keep both (rename)')
 				.setValue(this.plugin.settings.defaultConflictResolution)
-				.onChange(async (value: ConflictResolution) => {
-					this.plugin.settings.defaultConflictResolution = value;
+				.onChange(async (value: string) => {
+					this.plugin.settings.defaultConflictResolution = value as ConflictResolution;
 					await this.plugin.saveSettings();
 				}));
 	}
@@ -348,9 +353,9 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				.addOption('warn', 'Warnings only')
 				.addOption('error', 'Errors only')
 				.setValue(this.plugin.settings.logging.level)
-				.onChange(async (value: LogLevel) => {
-					this.plugin.settings.logging.level = value;
-					this.plugin.logger.configure({ level: value });
+				.onChange(async (value: string) => {
+					this.plugin.settings.logging.level = value as LogLevel;
+					this.plugin.logger.configure({ level: value as LogLevel });
 					await this.plugin.saveSettings();
 				}));
 
@@ -393,6 +398,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 			.setDesc('Clear all log entries from memory')
 			.addButton(button => button
 				.setButtonText('Clear')
+				// eslint-disable-next-line @typescript-eslint/no-deprecated -- setDestructive requires minAppVersion 1.13.0
 				.setWarning()
 				.onClick(() => {
 					this.plugin.logger.clear();
@@ -405,17 +411,17 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 
 		if (this.plugin.githubService.isAuthenticated) {
 			const user = this.plugin.githubService.user;
-			containerEl.createEl('div', {
+			containerEl.createDiv({
 				text: `✅ Connected as ${user?.login}`,
 				cls: 'github-octokit-status-connected',
 			});
 		} else if (this.plugin.settings.auth.token) {
-			containerEl.createEl('div', {
+			containerEl.createDiv({
 				text: 'Token saved but not validated. Click connect to verify.',
 				cls: 'github-octokit-status-pending',
 			});
 		} else {
-			containerEl.createEl('div', {
+			containerEl.createDiv({
 				text: 'Not connected. Enter a personal access token to connect.',
 				cls: 'github-octokit-status-disconnected',
 			});

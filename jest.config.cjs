@@ -17,8 +17,8 @@ module.exports = {
             tsconfig: {
                 module: 'commonjs',
                 esModuleInterop: true,
+                rootDir: '.',
             },
         }],
     },
 };
-
