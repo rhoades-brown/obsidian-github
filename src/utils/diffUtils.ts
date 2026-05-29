@@ -32,7 +32,7 @@ export interface DiffResult {
 function computeLCS(oldLines: string[], newLines: string[]): number[][] {
     const m = oldLines.length;
     const n = newLines.length;
-    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+    const dp: number[][] = Array.from({ length: m + 1 }, () => Array.from<number>({ length: n + 1 }).fill(0));
 
     for (let i = 1; i <= m; i++) {
         for (let j = 1; j <= n; j++) {
@@ -186,7 +186,7 @@ export function renderUnifiedDiff(diff: DiffResult, filename: string): string {
 /**
  * Apply changes from a diff to the old content (keep new content)
  */
-export function applyDiff(oldContent: string, changes: DiffLine[]): string {
+export function applyDiff(_oldContent: string, changes: DiffLine[]): string {
     const result: string[] = [];
     for (const line of changes) {
         if (line.type !== 'removed') {

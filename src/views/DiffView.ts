@@ -159,8 +159,8 @@ export class DiffView extends ItemView {
         const leftPane = container.createDiv({ cls: 'diff-pane diff-left' });
         const rightPane = container.createDiv({ cls: 'diff-pane diff-right' });
 
-        leftPane.createEl('div', { cls: 'pane-header', text: 'Remote (GitHub)' });   
-        rightPane.createEl('div', { cls: 'pane-header', text: 'Local (vault)' });
+        leftPane.createDiv({ cls: 'pane-header', text: 'Remote (GitHub)' });
+        rightPane.createDiv({ cls: 'pane-header', text: 'Local (vault)' });
 
         const leftContent = leftPane.createDiv({ cls: 'pane-content' });
         const rightContent = rightPane.createDiv({ cls: 'pane-content' });

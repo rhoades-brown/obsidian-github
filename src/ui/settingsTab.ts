@@ -405,17 +405,17 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 
 		if (this.plugin.githubService.isAuthenticated) {
 			const user = this.plugin.githubService.user;
-			containerEl.createEl('div', {
+			containerEl.createDiv({
 				text: `✅ Connected as ${user?.login}`,
 				cls: 'github-octokit-status-connected',
 			});
 		} else if (this.plugin.settings.auth.token) {
-			containerEl.createEl('div', {
+			containerEl.createDiv({
 				text: 'Token saved but not validated. Click connect to verify.',
 				cls: 'github-octokit-status-pending',
 			});
 		} else {
-			containerEl.createEl('div', {
+			containerEl.createDiv({
 				text: 'Not connected. Enter a personal access token to connect.',
 				cls: 'github-octokit-status-disconnected',
 			});

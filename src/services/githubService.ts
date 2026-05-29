@@ -530,7 +530,7 @@ export class GitHubService {
                 if (isNotFastForward && attempt < maxRetries - 1) {
                     // Remote was updated, wait briefly and retry with fresh ref
                     console.debug(`Batch commit attempt ${attempt + 1} failed (not fast-forward), retrying...`);
-                    await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+                    await new Promise(resolve => activeWindow.setTimeout(resolve, 500 * (attempt + 1)));
                     continue;
                 }
 
@@ -588,7 +588,7 @@ export class GitHubService {
 
         if (!check.ok && check.resetIn > 0) {
             console.debug(`Rate limit low (${check.remaining} remaining). Waiting ${check.resetIn} minutes...`);
-            await new Promise(resolve => setTimeout(resolve, check.resetIn * 60 * 1000));
+            await new Promise(resolve => activeWindow.setTimeout(resolve, check.resetIn * 60 * 1000));
         }
     }
 
