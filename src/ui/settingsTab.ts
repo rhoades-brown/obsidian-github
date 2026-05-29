@@ -4,6 +4,7 @@ import type { GitHubRepo } from '../services/githubService';
 import { LogLevel } from '../services/loggerService';
 import { AdditionalRepoConfig } from '../types/settings';
 import { LogViewerModal } from './modals/LogViewerModal';
+import { confirmDestructiveAction } from './modals/SyncModal';
 import type GitHubOctokitPlugin from '../../main';
 
 // ============================================================================
@@ -67,7 +68,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 			key,
 			value,
 		);
-		await this.plugin.saveData(this.plugin.settings);
+		await this.plugin.saveSettings();
 	}
 
 	// ========================================================================
@@ -120,6 +121,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 										.onChange(async (value) => {
 											this.plugin.settings.auth.token = value;
 											this.plugin.settings.auth.tokenValidated = false;
+											setting.setErrorMessage(null);
 											await this.plugin.saveSettings();
 										});
 									text.inputEl.type = 'password';
@@ -130,6 +132,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 									.onClick(async () => {
 										button.setButtonText('Connecting...');
 										button.setDisabled(true);
+										setting.setErrorMessage(null);
 
 										const success = await this.plugin.validateAndConnect();
 
@@ -137,7 +140,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 											new Notice(`Connected to GitHub as ${this.plugin.githubService.user?.login}`);
 											await this.loadRepositories();
 										} else {
-											new Notice('Failed to connect to GitHub. Check your token.');
+											setting.setErrorMessage('Failed to connect. Check your token and try again.');
 										}
 
 										this.update();
@@ -266,9 +269,21 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				},
 			},
 			onDelete: (idx: number) => {
-				repos.splice(idx, 1);
-				void this.plugin.saveSettings().then(() =>
-					this.plugin.initializeAdditionalRepos().then(() => this.update()),
+				const repo = repos[idx];
+				const label = repo.owner && repo.repo
+					? `${repo.owner}/${repo.repo}`
+					: 'this repository';
+				confirmDestructiveAction(
+					this.app,
+					'Remove repository',
+					`Are you sure you want to remove ${label}? This cannot be undone.`,
+					'Remove',
+					() => {
+						repos.splice(idx, 1);
+						void this.plugin.saveSettings().then(() =>
+							this.plugin.initializeAdditionalRepos().then(() => this.update()),
+						);
+					},
 				);
 			},
 			items: repos.map((repoConfig) => ({
@@ -345,9 +360,10 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 							const trimmed = value.trim();
 							const overlap = this.validateLocalPath(trimmed, repoConfig.id);
 							if (overlap) {
-								new Notice(overlap);
+								setting.setErrorMessage(overlap);
 								return;
 							}
+							setting.setErrorMessage(null);
 							repoConfig.localPath = trimmed;
 							await this.plugin.saveSettings();
 							await this.plugin.initializeAdditionalRepos();
@@ -514,15 +530,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 					{
 						name: 'Sync on interval',
 						desc: 'Automatically sync at regular intervals',
-						render: (setting) => {
-							setting.addToggle(toggle => toggle
-								.setValue(this.plugin.settings.syncSchedule.syncOnInterval)
-								.onChange(async (value) => {
-									this.plugin.settings.syncSchedule.syncOnInterval = value;
-									await this.plugin.saveSettings();
-									this.update();
-								}));
-						},
+						control: { type: 'toggle', key: 'syncSchedule.syncOnInterval' },
 					},
 					{
 						name: 'Sync interval (minutes)',
@@ -712,8 +720,16 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 								.setButtonText('Clear')
 								.setDestructive()
 								.onClick(() => {
-									this.plugin.logger.clear();
-									new Notice('Logs cleared');
+									confirmDestructiveAction(
+										this.app,
+										'Clear logs',
+										'Are you sure you want to clear all log entries? This cannot be undone.',
+										'Clear',
+										() => {
+											this.plugin.logger.clear();
+											new Notice('Logs cleared');
+										},
+									);
 								}));
 						},
 					},

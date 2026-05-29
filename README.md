@@ -22,6 +22,12 @@ Sync your Obsidian vault with GitHub using the official Octokit API — no Git C
 - **Shared config across devices** — additional repo configurations are stored in `.github-sync-repos.json` inside the vault, so they are synced with the primary repo and automatically picked up on other devices
 - **Per-repo tokens** — use the main token or a separate PAT for each additional repo
 
+### Settings
+
+- **Declarative settings UI** — built on Obsidian's 1.13.0 declarative Settings API with searchable, keyboard-navigable settings
+- **Inline validation** — connection failures and path overlaps shown as inline error messages directly on the setting
+- **Confirmation dialogs** — destructive actions (deleting repos, clearing logs) prompt for confirmation via native `ConfirmationModal`
+
 ### Security
 
 - **Encrypted token storage** — all GitHub tokens (main and per-repo) are stored in Obsidian's encrypted `SecretStorage`, never in plaintext `data.json`
@@ -52,7 +58,7 @@ Sync your Obsidian vault with GitHub using the official Octokit API — no Git C
 
 ## Prerequisites
 
-- Obsidian v1.12.7 or later
+- Obsidian v1.13.0 or later
 - A GitHub account with a Personal Access Token
 
 ## Installation

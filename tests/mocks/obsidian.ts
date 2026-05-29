@@ -168,9 +168,12 @@ export class PluginSettingTab {
 export type SettingDefinitionItem = any;
 
 export class Setting {
+    settingEl: HTMLElement = document.createElement('div');
+    errorEl: HTMLElement | null = null;
     constructor(public containerEl: HTMLElement) {}
     setName(_name: string): this { return this; }
     setDesc(_desc: string): this { return this; }
+    setErrorMessage(_message: string | null): this { return this; }
     addText(_cb: Function): this { return this; }
     addTextArea(_cb: Function): this { return this; }
     addToggle(_cb: Function): this { return this; }
@@ -181,10 +184,30 @@ export class Setting {
 
 export class Modal {
     contentEl: HTMLElement = document.createElement('div');
+    titleEl: HTMLElement = document.createElement('div');
     constructor(public app: App) {}
     open(): void {}
     close(): void {}
     onOpen(): void {}
     onClose(): void {}
+}
+
+export class ButtonComponent {
+    setButtonText(_name: string): this { return this; }
+    setCta(): this { return this; }
+    setDestructive(): this { return this; }
+    removeDestructive(): this { return this; }
+    setIcon(_icon: string): this { return this; }
+    setTooltip(_tooltip: string): this { return this; }
+    onClick(_cb: (evt: MouseEvent) => unknown): this { return this; }
+}
+
+export class ConfirmationModal extends Modal {
+    buttonContainerEl: HTMLElement = document.createElement('div');
+    constructor(app: App) { super(app); }
+    addClass(_cls: string): ConfirmationModal { return this; }
+    addCheckbox(_label: string, _cb: (value: boolean) => unknown): ConfirmationModal { return this; }
+    addButton(_cb: (btn: ButtonComponent) => unknown): ConfirmationModal { return this; }
+    addCancelButton(_text?: string): ConfirmationModal { return this; }
 }
 
