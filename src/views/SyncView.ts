@@ -28,6 +28,29 @@ export class SyncView extends ItemView {
     constructor(leaf: WorkspaceLeaf, plugin: GitHubOctokitPlugin) {
         super(leaf);
         this.plugin = plugin;
+        this.loadViewState();
+    }
+
+    /** Restore persisted UI state from vault-specific localStorage */
+    private loadViewState(): void {
+        const state = this.plugin.app.loadLocalStorage('github-octokit-sync-view') as string | null;
+        if (state) {
+            try {
+                const parsed = JSON.parse(state) as { commitsExpanded?: boolean; logsExpanded?: boolean };
+                if (typeof parsed.commitsExpanded === 'boolean') this.commitsExpanded = parsed.commitsExpanded;
+                if (typeof parsed.logsExpanded === 'boolean') this.logsExpanded = parsed.logsExpanded;
+            } catch {
+                // Ignore corrupt state
+            }
+        }
+    }
+
+    /** Persist UI state to vault-specific localStorage */
+    private saveViewState(): void {
+        this.plugin.app.saveLocalStorage('github-octokit-sync-view', JSON.stringify({
+            commitsExpanded: this.commitsExpanded,
+            logsExpanded: this.logsExpanded,
+        }));
     }
 
     getViewType(): string {
@@ -412,6 +435,7 @@ export class SyncView extends ItemView {
 
         header.addEventListener('click', () => {
             this.commitsExpanded = !this.commitsExpanded;
+            this.saveViewState();
             void this.render();
         });
 
@@ -476,6 +500,7 @@ export class SyncView extends ItemView {
             // Don't toggle if clicking on controls
             if ((e.target as HTMLElement).closest('.logs-controls')) return;
             this.logsExpanded = !this.logsExpanded;
+            this.saveViewState();
             void this.render();
         });
 

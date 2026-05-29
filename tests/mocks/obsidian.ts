@@ -11,6 +11,11 @@ export class App {
     vault = new Vault();
     workspace = new Workspace();
     secretStorage = new SecretStorage();
+    private localStorage: Map<string, string> = new Map();
+    loadLocalStorage(key: string): string | null { return this.localStorage.get(key) ?? null; }
+    saveLocalStorage(key: string, data: unknown | null): void {
+        if (data === null) { this.localStorage.delete(key); } else { this.localStorage.set(key, String(data)); }
+    }
 }
 
 export class Vault {
