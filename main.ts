@@ -593,13 +593,37 @@ export default class GitHubOctokitPlugin extends Plugin {
 		void _ignored; // intentionally unused - just extracting syncState from data
 		void _ignored2;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
+
+		// Migrate main token from plaintext data.json to SecretStorage
+		const storedSecret = this.app.secretStorage.getSecret('github-pat');
+		if (storedSecret) {
+			// Token already in SecretStorage — use it
+			this.settings.auth.token = storedSecret;
+		} else if (this.settings.auth.token) {
+			// Legacy: token still in data.json — migrate to SecretStorage
+			this.app.secretStorage.setSecret('github-pat', this.settings.auth.token);
+			// Clear from data.json on next save
+			await this.saveSettings();
+		}
 	}
 
 	async saveSettings() {
 		// Preserve syncState when saving settings
 		const data = (await this.loadData() || {}) as PersistedPluginData;
-		await this.saveData({
+
+		// Persist token to SecretStorage, not data.json
+		if (this.settings.auth.token) {
+			this.app.secretStorage.setSecret('github-pat', this.settings.auth.token);
+		}
+
+		// Exclude token from persisted settings
+		const settingsToSave = {
 			...this.settings,
+			auth: { ...this.settings.auth, token: '' },
+		};
+
+		await this.saveData({
+			...settingsToSave,
 			syncState: data.syncState,
 			additionalRepoStates: data.additionalRepoStates,
 		});
