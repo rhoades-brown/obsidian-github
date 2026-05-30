@@ -18,8 +18,27 @@ export class App {
     }
 }
 
+export class DataAdapter {
+    private rawFiles: Map<string, string> = new Map();
+
+    async exists(path: string): Promise<boolean> {
+        return this.rawFiles.has(path);
+    }
+
+    async read(path: string): Promise<string> {
+        const content = this.rawFiles.get(path);
+        if (content === undefined) throw new Error(`File not found: ${path}`);
+        return content;
+    }
+
+    async write(path: string, data: string): Promise<void> {
+        this.rawFiles.set(path, data);
+    }
+}
+
 export class Vault {
     private files: Map<string, string> = new Map();
+    adapter: DataAdapter = new DataAdapter();
 
     async read(file: TFile): Promise<string> {
         return this.files.get(file.path) || '';
@@ -49,7 +68,7 @@ export class Vault {
         return Array.from(this.files.keys()).map(p => new TFile(p));
     }
 
-    async createFolder(path: string): Promise<void> {
+    async createFolder(_path: string): Promise<void> {
         // Mock folder creation
     }
 }
