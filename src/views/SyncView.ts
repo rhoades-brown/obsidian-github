@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
 import type GitHubOctokitPlugin from '../../main';
 import { FileSyncState } from '../services/syncService';
 import { LogEntry } from '../services/loggerService';
+import { confirmDestructiveAction } from '../ui/modals/SyncModal';
 
 export const SYNC_VIEW_TYPE = 'github-octokit-sync-view';
 
@@ -520,10 +521,18 @@ export class SyncView extends ItemView {
         const clearBtn = controls.createEl('button', { text: 'Clear', cls: 'logs-clear-btn' });
         clearBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.plugin.logger.clear();
-            if (this.logsExpanded) {
-                this.renderLogEntries(logsContainer, 'all');
-            }
+            confirmDestructiveAction(
+                this.plugin.app,
+                'Clear logs',
+                'Are you sure you want to clear all log entries? This cannot be undone.',
+                'Clear',
+                () => {
+                    this.plugin.logger.clear();
+                    if (this.logsExpanded) {
+                        this.renderLogEntries(logsContainer, 'all');
+                    }
+                },
+            );
         });
 
         if (!this.logsExpanded) {
