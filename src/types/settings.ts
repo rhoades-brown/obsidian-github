@@ -76,6 +76,16 @@ export interface AdditionalRepoConfig {
 	enabled: boolean;
 }
 
+/**
+ * Vault-persisted repo config — same as AdditionalRepoConfig but without the
+ * `token` field which is kept in SecretStorage per-device.
+ * Stored in VAULT_REPOS_CONFIG_PATH so it syncs with the primary repository.
+ */
+export type VaultRepoConfig = Omit<AdditionalRepoConfig, 'token'>;
+
+/** Path to the vault file that stores additional repo configurations */
+export const VAULT_REPOS_CONFIG_PATH = '.github-sync-repos.json';
+
 /** Main plugin settings */
 export interface GitHubOctokitSettings {
 	// Authentication

@@ -5,7 +5,7 @@ import { LoggerService } from './src/services/loggerService';
 import { DiffView, DIFF_VIEW_TYPE } from './src/views/DiffView';
 import { SyncView, SYNC_VIEW_TYPE } from './src/views/SyncView';
 import { GitHubOctokitSettingTab, SyncModal } from './src/ui';
-import { GitHubOctokitSettings, DEFAULT_SETTINGS, AdditionalRepoConfig } from './src/types/settings';
+import { GitHubOctokitSettings, DEFAULT_SETTINGS, AdditionalRepoConfig, VaultRepoConfig, VAULT_REPOS_CONFIG_PATH } from './src/types/settings';
 
 /** Per-repo runtime state for additional repositories */
 export interface AdditionalRepoRuntime {
@@ -594,6 +594,9 @@ export default class GitHubOctokitPlugin extends Plugin {
 		void _ignored2;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
 
+		// Load additional repo configs from vault file and merge
+		await this.loadVaultRepoConfig();
+
 		// Migrate main token from plaintext data.json to SecretStorage
 		const storedSecret = this.app.secretStorage.getSecret('github-pat');
 		if (storedSecret) {
@@ -653,6 +656,73 @@ export default class GitHubOctokitPlugin extends Plugin {
 			syncState: data.syncState,
 			additionalRepoStates: data.additionalRepoStates,
 		});
+
+		// Persist repo configs to vault file so they sync with the primary repo
+		await this.saveVaultRepoConfig();
+	}
+
+	/**
+	 * Load additional repo configs from the vault file (.github-sync-repos.json).
+	 * Merges vault-file entries with any existing entries in data.json,
+	 * using the vault file as the source of truth for structural config.
+	 * Tokens are resolved separately from SecretStorage.
+	 */
+	private async loadVaultRepoConfig(): Promise<void> {
+		try {
+			const exists = await this.app.vault.adapter.exists(VAULT_REPOS_CONFIG_PATH);
+			if (!exists) return;
+
+			const raw = await this.app.vault.adapter.read(VAULT_REPOS_CONFIG_PATH);
+			const vaultConfigs = JSON.parse(raw) as VaultRepoConfig[];
+			if (!Array.isArray(vaultConfigs)) return;
+
+			// Build a map of existing settings repos by id for token lookup
+			const existingById = new Map<string, AdditionalRepoConfig>();
+			for (const repo of this.settings.additionalRepos) {
+				existingById.set(repo.id, repo);
+			}
+
+			// Merge: vault file is source of truth for config,
+			// existing settings provide the token (which will be resolved from SecretStorage later)
+			this.settings.additionalRepos = vaultConfigs.map(vc => {
+				const existing = existingById.get(vc.id);
+				return {
+					...vc,
+					token: existing?.token ?? '',
+				};
+			});
+		} catch {
+			// File doesn't exist or is malformed — no-op, use data.json repos
+		}
+	}
+
+	/**
+	 * Save additional repo configs to the vault file (.github-sync-repos.json).
+	 * Strips tokens before writing so secrets never end up in the vault.
+	 * Uses the Vault API (create/modify) so the file is tracked in the vault
+	 * index and included in sync operations.
+	 */
+	private async saveVaultRepoConfig(): Promise<void> {
+		const vaultConfigs: VaultRepoConfig[] = this.settings.additionalRepos.map(
+			({ token: _token, ...rest }) => {
+				void _token;
+				return rest;
+			}
+		);
+
+		const json = JSON.stringify(vaultConfigs, null, '\t');
+
+		try {
+			const existing = this.app.vault.getAbstractFileByPath(VAULT_REPOS_CONFIG_PATH);
+			if (existing instanceof TFile) {
+				await this.app.vault.modify(existing, json);
+			} else if (vaultConfigs.length > 0) {
+				// Only create the file if there are repos to persist
+				await this.app.vault.create(VAULT_REPOS_CONFIG_PATH, json);
+			}
+		} catch (error) {
+			console.error('Failed to save vault repo config:', error);
+		}
 	}
 
 	async loadSyncState() {
