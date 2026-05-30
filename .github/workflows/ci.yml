@@ -17,6 +17,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,6 +55,36 @@ jobs:
             styles.css
           retention-days: 14
 
+      - name: Get current version
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+        id: version
+        run: |
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Attest pre-release provenance
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            main.js
+            styles.css
+            manifest.json
+
+      - name: Create pre-release
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}-${{ github.run_number }}
+          name: ${{ steps.version.outputs.version }}-${{ github.run_number }}
+          files: |
+            main.js
+            manifest.json
+            styles.css
+          generate_release_notes: true
+          draft: false
+          prerelease: true
+
   # ------------------------------------------------------------------
   # Release — only on push to main/master, after build passes.
   # Analyses conventional commits since the last tag, bumps the
@@ -62,6 +97,8 @@ jobs:
 
     permissions:
       contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Generate app token
@@ -147,6 +184,15 @@ jobs:
           git add manifest.json package.json versions.json package-lock.json
           git commit -m "chore: release ${{ steps.version.outputs.version }} [skip ci]"
           git push
+
+      - name: Attest build provenance
+        if: steps.skip.outputs.skip == 'false' && steps.bump.outputs.bump != 'none'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            main.js
+            styles.css
+            manifest.json
 
       - name: Create release
         if: steps.skip.outputs.skip == 'false' && steps.bump.outputs.bump != 'none'
