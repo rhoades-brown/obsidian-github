@@ -333,6 +333,36 @@ describe('SyncService - Branch-aware remote reads', () => {
     });
 });
 
+describe('SyncService - Error propagation', () => {
+    it('marks sync as failed when pull operations return file errors', async () => {
+        const githubService = {
+            getFileContent: jest.fn().mockRejectedValue(new Error('Not Found - https://docs.github.com/rest/repos/contents#get-repository-content')),
+        };
+
+        const app = new App();
+        const service = new SyncService(app as never, githubService as never);
+        const remoteIndex = new Map<string, RemoteFileEntry>([
+            ['notes/missing.md', { path: 'notes/missing.md', sha: 'remote-sha' }],
+        ]);
+
+        jest.spyOn(service, 'buildLocalIndex').mockResolvedValue(new Map());
+        jest.spyOn(service, 'buildRemoteIndex').mockResolvedValue(remoteIndex);
+
+        const { result } = await service.sync(
+            'octo',
+            'branch-repo',
+            'feature/sync-target',
+            'Sync test'
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.filesProcessed).toBe(0);
+        expect(result.errors).toEqual([
+            'Not Found - https://docs.github.com/rest/repos/contents#get-repository-content',
+        ]);
+    });
+});
+
 describe('SyncService - Effective Ignore Patterns', () => {
     /**
      * Simulates getEffectiveIgnorePatterns logic for testing

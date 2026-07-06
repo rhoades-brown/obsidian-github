@@ -863,6 +863,9 @@ export class SyncService {
         }
 
         result.filesProcessed = result.filesPulled + result.filesPushed + result.filesDeleted;
+        if (result.errors.length > 0) {
+            result.success = false;
+        }
 
         // Build new sync state
         const newLocalIndex = await this.buildLocalIndex();
