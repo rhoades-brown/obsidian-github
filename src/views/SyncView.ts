@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
 import type GitHubOctokitPlugin from '../../main';
 import { FileSyncState } from '../services/syncService';
 import { LogEntry } from '../services/loggerService';
+import { normalizePath } from '../utils/fileUtils';
 
 export const SYNC_VIEW_TYPE = 'github-octokit-sync-view';
 
@@ -29,6 +30,14 @@ export class SyncView extends ItemView {
         super(leaf);
         this.plugin = plugin;
         this.loadViewState();
+    }
+
+    private toRepoPath(path: string): string {
+        const subfolderPath = this.plugin.settings.subfolderPath;
+        if (!subfolderPath) {
+            return path;
+        }
+        return normalizePath(`${subfolderPath}/${path}`);
     }
 
     /** Restore persisted UI state from vault-specific localStorage */
@@ -348,7 +357,8 @@ export class SyncView extends ItemView {
             if (this.plugin.settings.repo) {
                 const ghBtn = actions.createEl('button', { text: 'GitHub', cls: 'file-action' });
                 ghBtn.addEventListener('click', () => {
-                    const url = `https://github.com/${this.plugin.settings.repo!.owner}/${this.plugin.settings.repo!.name}/blob/${this.plugin.settings.repo!.branch}/${file.path}`;
+                    const repoPath = this.toRepoPath(file.path);
+                    const url = `https://github.com/${this.plugin.settings.repo!.owner}/${this.plugin.settings.repo!.name}/blob/${this.plugin.settings.repo!.branch}/${repoPath}`;
                     window.open(url, '_blank');
                 });
             }
@@ -368,10 +378,11 @@ export class SyncView extends ItemView {
             let remoteContent = '';
             if (this.plugin.settings.repo) {
                 try {
+                    const repoPath = this.toRepoPath(path);
                     const remote = await this.plugin.githubService.getFileContent(
                         this.plugin.settings.repo.owner,
                         this.plugin.settings.repo.name,
-                        path,
+                        repoPath,
                         this.plugin.settings.repo.branch
                     );
                     remoteContent = atob(remote.content);
