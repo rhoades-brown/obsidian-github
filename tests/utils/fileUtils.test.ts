@@ -247,6 +247,26 @@ describe('Base64 Encoding', () => {
             expect(decoded).toBe(original);
         });
 
+        it('should auto-detect gb18030 encoded text from GitHub', () => {
+            const original = '函数性质与分段函数';
+            const encoder = new TextEncoder();
+            const utf8Bytes = encoder.encode(original);
+            expect(new TextDecoder('gb18030').decode(utf8Bytes)).not.toBe(original);
+
+            const gb18030Bytes = new Uint8Array([
+                186, 175, 202, 253, 208, 212, 214, 202, 211,
+                235, 183, 214, 182, 206, 186, 175, 202, 253,
+            ]);
+            let binary = '';
+            for (const byte of gb18030Bytes) {
+                binary += String.fromCharCode(byte);
+            }
+            const encoded = btoa(binary);
+
+            const decoded = decodeBase64(encoded);
+            expect(decoded).toBe(original);
+        });
+
         it('should handle empty string', () => {
             const encoded = encodeBase64('');
             const decoded = decodeBase64(encoded);

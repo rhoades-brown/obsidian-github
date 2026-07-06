@@ -336,6 +336,17 @@ export function decodeBase64(base64: string): string {
     for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
     }
+
+    const encodingsToTry = ['utf-8', 'gb18030', 'big5', 'shift_jis'] as const;
+
+    for (const encoding of encodingsToTry) {
+        try {
+            return new TextDecoder(encoding, { fatal: true }).decode(bytes);
+        } catch {
+            continue;
+        }
+    }
+
     return new TextDecoder().decode(bytes);
 }
 
@@ -362,4 +373,3 @@ export function decodeBase64Binary(base64: string): ArrayBuffer {
     }
     return bytes.buffer;
 }
-
