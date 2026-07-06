@@ -534,11 +534,12 @@ export class SyncService {
         owner: string,
         repo: string,
         remotePath: string,
-        localPath: string
+        localPath: string,
+        branch?: string
     ): Promise<FileSyncResult> {
         try {
             console.debug(`[Sync] Pulling file: ${remotePath} -> ${localPath}`);
-            const content = await this.githubService.getFileContent(owner, repo, remotePath);
+            const content = await this.githubService.getFileContent(owner, repo, remotePath, branch);
             const isBin = isBinaryFile(localPath);
 
             if (isBin) {
@@ -606,7 +607,8 @@ export class SyncService {
                     owner,
                     repo,
                     remote.path,
-                    absolutePath
+                    absolutePath,
+                    _branch
                 );
                 // Store the relative path in the result for consistency
                 result.path = change.path;

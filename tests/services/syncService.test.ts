@@ -1,4 +1,5 @@
-import { FileSyncState, LocalFileEntry, RemoteFileEntry, PersistedSyncState } from '../../src/services/syncService';
+import { App } from 'obsidian';
+import { SyncService, FileSyncState, LocalFileEntry, RemoteFileEntry, PersistedSyncState } from '../../src/services/syncService';
 import { matchesIgnorePattern } from '../../src/utils/fileUtils';
 
 /**
@@ -291,6 +292,44 @@ describe('SyncService - Deletion Sync Logic', () => {
             expect(shouldPush(change, localIndex, remoteIndex, undefined, 'sync')).toBe(false);
             expect(shouldPull(change, localIndex, remoteIndex, undefined, 'sync')).toBe(false);
         });
+    });
+});
+
+describe('SyncService - Branch-aware remote reads', () => {
+    it('passes the configured branch when pulling remote file contents', async () => {
+        const githubService = {
+            getFileContent: jest.fn().mockResolvedValue({
+                path: 'notes/branch-only.md',
+                sha: 'remote-sha',
+                content: Buffer.from('branch content', 'utf8').toString('base64'),
+                encoding: 'base64',
+                size: 14,
+            }),
+        };
+
+        const app = new App();
+        const service = new SyncService(app as never, githubService as never);
+        const changes: FileSyncState[] = [{
+            path: 'notes/branch-only.md',
+            localHash: null,
+            remoteHash: 'remote-sha',
+            remoteSha: 'remote-sha',
+            status: 'added',
+            localModified: null,
+            remoteModified: null,
+        }];
+        const remoteIndex = new Map<string, RemoteFileEntry>([
+            ['notes/branch-only.md', { path: 'notes/branch-only.md', sha: 'remote-sha' }],
+        ]);
+
+        await service.pullChanges('octo', 'branch-repo', 'feature/sync-target', changes, remoteIndex);
+
+        expect(githubService.getFileContent).toHaveBeenCalledWith(
+            'octo',
+            'branch-repo',
+            'notes/branch-only.md',
+            'feature/sync-target'
+        );
     });
 });
 

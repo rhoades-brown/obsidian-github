@@ -371,7 +371,8 @@ export class SyncView extends ItemView {
                     const remote = await this.plugin.githubService.getFileContent(
                         this.plugin.settings.repo.owner,
                         this.plugin.settings.repo.name,
-                        path
+                        path,
+                        this.plugin.settings.repo.branch
                     );
                     remoteContent = atob(remote.content);
                 } catch {
