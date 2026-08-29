@@ -252,7 +252,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 			emptyState: 'No additional repositories configured.',
 			addItem: {
 				name: 'Add repository',
-				action: async () => {
+				action: () => {
 					repos.push({
 						id: this.generateId(),
 						owner: '',
@@ -265,8 +265,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 						ignorePatterns: [],
 						enabled: true,
 					});
-					await this.plugin.saveSettings();
-					this.update();
+					void this.plugin.saveSettings().then(() => this.update());
 				},
 			},
 			onDelete: (idx: number) => {
@@ -279,11 +278,11 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 					'Remove repository',
 					`Are you sure you want to remove ${label}? This cannot be undone.`,
 					'Remove',
-					async () => {
+					() => {
 						repos.splice(idx, 1);
-						await this.plugin.saveSettings();
-						await this.plugin.initializeAdditionalRepos();
-						this.update();
+						void this.plugin.saveSettings()
+							.then(() => this.plugin.initializeAdditionalRepos())
+							.then(() => this.update());
 					},
 				);
 			},
@@ -460,21 +459,21 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 			emptyState: 'No ignore patterns configured.',
 			addItem: {
 				name: 'Add pattern',
-				action: async () => {
+				action: () => {
 					patterns.push('');
-					await this.plugin.saveSettings();
-					this.update();
+					void this.plugin.saveSettings().then(() => this.update());
 				},
 			},
-			onDelete: async (idx: number) => {
+			onDelete: (idx: number) => {
 				patterns.splice(idx, 1);
-				await this.plugin.saveSettings();
-				this.plugin.syncService.configure(
-					this.plugin.getMainRepoIgnorePatterns(),
-					this.plugin.settings.subfolderPath,
-					this.plugin.settings.syncConfiguration
-				);
-				this.update();
+				void this.plugin.saveSettings().then(() => {
+					this.plugin.syncService.configure(
+						this.plugin.getMainRepoIgnorePatterns(),
+						this.plugin.settings.subfolderPath,
+						this.plugin.settings.syncConfiguration
+					);
+					this.update();
+				});
 			},
 			items: patterns.map((pattern, idx) => ({
 				name: pattern || 'New pattern',
