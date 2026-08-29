@@ -205,8 +205,9 @@ export default class GitHubOctokitPlugin extends Plugin {
 				});
 
 				menu.addItem((item: MenuItem) => {
-					item.setTitle('Copy GitHub link')
-						.setIcon('copy')
+					item.setTitle('GitHub link')
+						.setIcon('github')
+						.setSection('info.copy')
 						.onClick(() => {
 							void navigator.clipboard.writeText(resolved);
 							new Notice('GitHub link copied to clipboard');
