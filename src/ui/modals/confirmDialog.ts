@@ -6,7 +6,7 @@ import { App, ConfirmationModal } from 'obsidian';
  * @param app         The Obsidian App instance
  * @param title       Heading text shown in the modal
  * @param message     Body text describing the consequences
- * @param confirmText Label for the confirm button (default: "Delete")
+ * @param confirmText Label for the confirm button
  * @param onConfirm   Callback invoked when the user confirms
  */
 export function confirmDestructiveAction(
@@ -27,4 +27,3 @@ export function confirmDestructiveAction(
 	modal.addCancelButton();
 	modal.open();
 }
-

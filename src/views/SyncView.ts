@@ -3,7 +3,7 @@ import type GitHubOctokitPlugin from '../../main';
 import { FileSyncState } from '../services/syncService';
 import { LogEntry } from '../services/loggerService';
 import { decodeBase64, normalizePath } from '../utils/fileUtils';
-import { confirmDestructiveAction } from '../ui/modals/SyncModal';
+import { confirmDestructiveAction } from '../ui/modals/confirmDialog';
 
 export const SYNC_VIEW_TYPE = 'github-octokit-sync-view';
 

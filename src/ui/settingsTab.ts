@@ -4,7 +4,7 @@ import type { GitHubRepo } from '../services/githubService';
 import { LogLevel } from '../services/loggerService';
 import { AdditionalRepoConfig } from '../types/settings';
 import { LogViewerModal } from './modals/LogViewerModal';
-import { confirmDestructiveAction } from './modals/SyncModal';
+import { confirmDestructiveAction } from './modals/confirmDialog';
 import type GitHubOctokitPlugin from '../../main';
 
 // ============================================================================
@@ -137,7 +137,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 										const success = await this.plugin.validateAndConnect();
 
 										if (success) {
-											new Notice(`Connected to GitHub as ${this.plugin.githubService.user?.login}`);
+											new Notice(`Connected to GitHub as ${this.plugin.githubService.user?.login ?? 'unknown'}`);
 											await this.loadRepositories();
 										} else {
 											setting.setErrorMessage('Failed to connect. Check your token and try again.');
@@ -252,7 +252,7 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 			emptyState: 'No additional repositories configured.',
 			addItem: {
 				name: 'Add repository',
-				action: () => {
+				action: async () => {
 					repos.push({
 						id: this.generateId(),
 						owner: '',
@@ -265,7 +265,8 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 						ignorePatterns: [],
 						enabled: true,
 					});
-					void this.plugin.saveSettings().then(() => this.update());
+					await this.plugin.saveSettings();
+					this.update();
 				},
 			},
 			onDelete: (idx: number) => {
@@ -278,11 +279,11 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 					'Remove repository',
 					`Are you sure you want to remove ${label}? This cannot be undone.`,
 					'Remove',
-					() => {
+					async () => {
 						repos.splice(idx, 1);
-						void this.plugin.saveSettings().then(() =>
-							this.plugin.initializeAdditionalRepos().then(() => this.update()),
-						);
+						await this.plugin.saveSettings();
+						await this.plugin.initializeAdditionalRepos();
+						this.update();
 					},
 				);
 			},
@@ -459,21 +460,21 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 			emptyState: 'No ignore patterns configured.',
 			addItem: {
 				name: 'Add pattern',
-				action: () => {
+				action: async () => {
 					patterns.push('');
-					void this.plugin.saveSettings().then(() => this.update());
+					await this.plugin.saveSettings();
+					this.update();
 				},
 			},
-			onDelete: (idx: number) => {
+			onDelete: async (idx: number) => {
 				patterns.splice(idx, 1);
-				void this.plugin.saveSettings().then(() => {
-					this.plugin.syncService.configure(
-						this.plugin.getMainRepoIgnorePatterns(),
-						this.plugin.settings.subfolderPath,
-						this.plugin.settings.syncConfiguration
-					);
-					this.update();
-				});
+				await this.plugin.saveSettings();
+				this.plugin.syncService.configure(
+					this.plugin.getMainRepoIgnorePatterns(),
+					this.plugin.settings.subfolderPath,
+					this.plugin.settings.syncConfiguration
+				);
+				this.update();
 			},
 			items: patterns.map((pattern, idx) => ({
 				name: pattern || 'New pattern',
@@ -775,4 +776,3 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 		}
 	}
 }
-

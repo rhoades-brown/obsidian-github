@@ -1,4 +1,2 @@
 export * from './LogViewerModal';
-export * from './SyncModal';
-
-
+export * from './confirmDialog';
