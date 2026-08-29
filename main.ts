@@ -1,4 +1,4 @@
-import { Menu, MenuItem, Notice, Plugin, TFile } from 'obsidian';
+import { Menu, MenuItem, Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
 import { GitHubService } from './src/services/githubService';
 import { SyncService, PersistedSyncState, SyncResult } from './src/services/syncService';
 import { LoggerService } from './src/services/loggerService';
@@ -6,6 +6,7 @@ import { DiffView, DIFF_VIEW_TYPE } from './src/views/DiffView';
 import { SyncView, SYNC_VIEW_TYPE } from './src/views/SyncView';
 import { GitHubOctokitSettingTab } from './src/ui';
 import { GitHubOctokitSettings, DEFAULT_SETTINGS, AdditionalRepoConfig, VaultRepoConfig, VAULT_REPOS_CONFIG_PATH } from './src/types/settings';
+import { normalizePath } from './src/utils/fileUtils';
 
 /** Per-repo runtime state for additional repositories */
 export interface AdditionalRepoRuntime {
@@ -188,6 +189,33 @@ export default class GitHubOctokitPlugin extends Plugin {
 			}
 		});
 
+		// File context menu: Open on GitHub / Copy GitHub link
+		this.registerEvent(
+			this.app.workspace.on('file-menu', (menu, file: TAbstractFile) => {
+				if (!(file instanceof TFile)) return;
+				const resolved = this.resolveGitHubUrl(file.path);
+				if (!resolved) return;
+
+				menu.addItem((item: MenuItem) => {
+					item.setTitle('Open on GitHub')
+						.setIcon('external-link')
+						.onClick(() => {
+							window.open(resolved, '_blank');
+						});
+				});
+
+				menu.addItem((item: MenuItem) => {
+					item.setTitle('GitHub link')
+						.setIcon('github')
+						.setSection('info.copy')
+						.onClick(() => {
+							void navigator.clipboard.writeText(resolved);
+							new Notice('GitHub link copied to clipboard');
+						});
+				});
+			})
+		);
+
 		// This adds a settings tab
 		this.addSettingTab(new GitHubOctokitSettingTab(this.app, this));
 
@@ -270,6 +298,45 @@ export default class GitHubOctokitPlugin extends Plugin {
 			}
 		}
 		return patterns;
+	}
+
+	// ========================================================================
+	// GitHub URL helpers
+	// ========================================================================
+
+	/**
+	 * Convert a local vault path to the corresponding remote repo path,
+	 * accounting for subfolderPath mapping.
+	 */
+	toRepoPath(localPath: string, subfolderPath: string): string {
+		if (!subfolderPath || subfolderPath === '/') {
+			return localPath;
+		}
+		return normalizePath(`${subfolderPath}/${localPath}`);
+	}
+
+	/**
+	 * Resolve the repo config (main or additional) that owns a given vault path.
+	 * Returns the GitHub blob URL, or null if no repo is configured.
+	 */
+	resolveGitHubUrl(vaultPath: string): string | null {
+		if (!this.githubService.isAuthenticated) return null;
+
+		// Check additional repos first (more specific paths)
+		for (const repoConfig of this.settings.additionalRepos) {
+			if (!repoConfig.enabled || !repoConfig.localPath) continue;
+			const prefix = repoConfig.localPath + '/';
+			if (vaultPath === repoConfig.localPath || vaultPath.startsWith(prefix)) {
+				const relativePath = vaultPath.slice(prefix.length);
+				const repoPath = this.toRepoPath(relativePath, repoConfig.subfolderPath);
+				return `https://github.com/${repoConfig.owner}/${repoConfig.repo}/blob/${repoConfig.branch}/${repoPath}`;
+			}
+		}
+
+		// Fall back to main repo
+		if (!this.settings.repo) return null;
+		const repoPath = this.toRepoPath(vaultPath, this.settings.subfolderPath);
+		return `https://github.com/${this.settings.repo.owner}/${this.settings.repo.name}/blob/${this.settings.repo.branch}/${repoPath}`;
 	}
 
 	/**

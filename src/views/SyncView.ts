@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
 import type GitHubOctokitPlugin from '../../main';
 import { FileSyncState } from '../services/syncService';
 import { LogEntry } from '../services/loggerService';
-import { decodeBase64, normalizePath } from '../utils/fileUtils';
+import { decodeBase64 } from '../utils/fileUtils';
 import { confirmDestructiveAction } from '../ui/modals/confirmDialog';
 
 export const SYNC_VIEW_TYPE = 'github-octokit-sync-view';
@@ -34,11 +34,7 @@ export class SyncView extends ItemView {
     }
 
     private toRepoPath(path: string): string {
-        const subfolderPath = this.plugin.settings.subfolderPath;
-        if (!subfolderPath || subfolderPath === '/') {
-            return path;
-        }
-        return normalizePath(`${subfolderPath}/${path}`);
+        return this.plugin.toRepoPath(path, this.plugin.settings.subfolderPath);
     }
 
     /** Restore persisted UI state from vault-specific localStorage */
@@ -355,12 +351,11 @@ export class SyncView extends ItemView {
             });
 
             // Open in GitHub
-            if (this.plugin.settings.repo) {
+            const ghUrl = this.plugin.resolveGitHubUrl(file.path);
+            if (ghUrl) {
                 const ghBtn = actions.createEl('button', { text: 'GitHub', cls: 'file-action' });
                 ghBtn.addEventListener('click', () => {
-                    const repoPath = this.toRepoPath(file.path);
-                    const url = `https://github.com/${this.plugin.settings.repo!.owner}/${this.plugin.settings.repo!.name}/blob/${this.plugin.settings.repo!.branch}/${repoPath}`;
-                    window.open(url, '_blank');
+                    window.open(ghUrl, '_blank');
                 });
             }
         }
