@@ -1,5 +1,6 @@
 import { App } from 'obsidian';
 import { SyncView } from '../../src/views/SyncView';
+import { normalizePath } from '../../src/utils/fileUtils';
 
 describe('SyncView - Branch-aware remote reads', () => {
     it('passes the configured branch when loading remote content for diff', async () => {
@@ -25,6 +26,10 @@ describe('SyncView - Branch-aware remote reads', () => {
             },
             githubService,
             openDiffView: jest.fn().mockResolvedValue(null),
+            toRepoPath(localPath: string, subfolderPath: string): string {
+                if (!subfolderPath || subfolderPath === '/') return localPath;
+                return normalizePath(`${subfolderPath}/${localPath}`);
+            },
         };
 
         const view = Object.create(SyncView.prototype) as SyncView & {
@@ -68,6 +73,10 @@ describe('SyncView - Branch-aware remote reads', () => {
             },
             githubService,
             openDiffView: jest.fn().mockResolvedValue(null),
+            toRepoPath(localPath: string, subfolderPath: string): string {
+                if (!subfolderPath || subfolderPath === '/') return localPath;
+                return normalizePath(`${subfolderPath}/${localPath}`);
+            },
         };
 
         const view = Object.create(SyncView.prototype) as SyncView & {
@@ -111,6 +120,10 @@ describe('SyncView - Branch-aware remote reads', () => {
             },
             githubService,
             openDiffView: jest.fn().mockResolvedValue(null),
+            toRepoPath(localPath: string, subfolderPath: string): string {
+                if (!subfolderPath || subfolderPath === '/') return localPath;
+                return normalizePath(`${subfolderPath}/${localPath}`);
+            },
         };
 
         const view = Object.create(SyncView.prototype) as SyncView & {
