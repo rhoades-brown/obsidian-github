@@ -34,7 +34,7 @@ export class SyncView extends ItemView {
 
     private toRepoPath(path: string): string {
         const subfolderPath = this.plugin.settings.subfolderPath;
-        if (!subfolderPath) {
+        if (!subfolderPath || subfolderPath === '/') {
             return path;
         }
         return normalizePath(`${subfolderPath}/${path}`);
