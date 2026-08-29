@@ -56,14 +56,20 @@ jobs:
           retention-days: 14
 
       - name: Get current version
-        if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+        if: >-
+          github.event_name == 'pull_request'
+          && github.event.pull_request.draft == false
+          && github.event.pull_request.head.repo.full_name == github.repository
         id: version
         run: |
           VERSION=$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Attest pre-release provenance
-        if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+        if: >-
+          github.event_name == 'pull_request'
+          && github.event.pull_request.draft == false
+          && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: |
@@ -72,7 +78,10 @@ jobs:
             manifest.json
 
       - name: Create pre-release
-        if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+        if: >-
+          github.event_name == 'pull_request'
+          && github.event.pull_request.draft == false
+          && github.event.pull_request.head.repo.full_name == github.repository
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}-${{ github.run_number }}
