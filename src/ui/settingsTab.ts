@@ -447,7 +447,6 @@ export class GitHubOctokitSettingTab extends PluginSettingTab {
 				.addSlider(slider => slider
 					.setLimits(5, 120, 5)
 					.setValue(this.plugin.settings.syncSchedule.intervalMinutes)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						this.plugin.settings.syncSchedule.intervalMinutes = value;
 						await this.plugin.saveSettings();
