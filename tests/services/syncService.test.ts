@@ -1,4 +1,5 @@
-import { FileSyncState, LocalFileEntry, RemoteFileEntry, PersistedSyncState } from '../../src/services/syncService';
+import { App } from 'obsidian';
+import { SyncService, FileSyncState, LocalFileEntry, RemoteFileEntry, PersistedSyncState } from '../../src/services/syncService';
 import { matchesIgnorePattern } from '../../src/utils/fileUtils';
 
 /**
@@ -291,6 +292,74 @@ describe('SyncService - Deletion Sync Logic', () => {
             expect(shouldPush(change, localIndex, remoteIndex, undefined, 'sync')).toBe(false);
             expect(shouldPull(change, localIndex, remoteIndex, undefined, 'sync')).toBe(false);
         });
+    });
+});
+
+describe('SyncService - Branch-aware remote reads', () => {
+    it('passes the configured branch when pulling remote file contents', async () => {
+        const githubService = {
+            getFileContent: jest.fn().mockResolvedValue({
+                path: 'notes/branch-only.md',
+                sha: 'remote-sha',
+                content: Buffer.from('branch content', 'utf8').toString('base64'),
+                encoding: 'base64',
+                size: 14,
+            }),
+        };
+
+        const app = new App();
+        const service = new SyncService(app as never, githubService as never);
+        const changes: FileSyncState[] = [{
+            path: 'notes/branch-only.md',
+            localHash: null,
+            remoteHash: 'remote-sha',
+            remoteSha: 'remote-sha',
+            status: 'added',
+            localModified: null,
+            remoteModified: null,
+        }];
+        const remoteIndex = new Map<string, RemoteFileEntry>([
+            ['notes/branch-only.md', { path: 'notes/branch-only.md', sha: 'remote-sha' }],
+        ]);
+
+        await service.pullChanges('octo', 'branch-repo', 'feature/sync-target', changes, remoteIndex);
+
+        expect(githubService.getFileContent).toHaveBeenCalledWith(
+            'octo',
+            'branch-repo',
+            'notes/branch-only.md',
+            'feature/sync-target'
+        );
+    });
+});
+
+describe('SyncService - Error propagation', () => {
+    it('marks sync as failed when pull operations return file errors', async () => {
+        const githubService = {
+            getFileContent: jest.fn().mockRejectedValue(new Error('Not Found - https://docs.github.com/rest/repos/contents#get-repository-content')),
+        };
+
+        const app = new App();
+        const service = new SyncService(app as never, githubService as never);
+        const remoteIndex = new Map<string, RemoteFileEntry>([
+            ['notes/missing.md', { path: 'notes/missing.md', sha: 'remote-sha' }],
+        ]);
+
+        jest.spyOn(service, 'buildLocalIndex').mockResolvedValue(new Map());
+        jest.spyOn(service, 'buildRemoteIndex').mockResolvedValue(remoteIndex);
+
+        const { result } = await service.sync(
+            'octo',
+            'branch-repo',
+            'feature/sync-target',
+            'Sync test'
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.filesProcessed).toBe(0);
+        expect(result.errors).toEqual([
+            'Not Found - https://docs.github.com/rest/repos/contents#get-repository-content',
+        ]);
     });
 });
 
