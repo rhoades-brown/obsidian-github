@@ -585,7 +585,7 @@ export class SyncService {
     async pullChanges(
         owner: string,
         repo: string,
-        _branch: string,
+        branch: string,
         changes: FileSyncState[],
         remoteIndex: Map<string, RemoteFileEntry>
     ): Promise<FileSyncResult[]> {
@@ -608,7 +608,7 @@ export class SyncService {
                     repo,
                     remote.path,
                     absolutePath,
-                    _branch
+                    branch
                 );
                 // Store the relative path in the result for consistency
                 result.path = change.path;

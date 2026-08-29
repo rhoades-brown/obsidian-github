@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
 import type GitHubOctokitPlugin from '../../main';
 import { FileSyncState } from '../services/syncService';
 import { LogEntry } from '../services/loggerService';
-import { normalizePath } from '../utils/fileUtils';
+import { decodeBase64, normalizePath } from '../utils/fileUtils';
 
 export const SYNC_VIEW_TYPE = 'github-octokit-sync-view';
 
@@ -385,7 +385,7 @@ export class SyncView extends ItemView {
                         repoPath,
                         this.plugin.settings.repo.branch
                     );
-                    remoteContent = atob(remote.content);
+                    remoteContent = decodeBase64(remote.content);
                 } catch {
                     // File doesn't exist on remote
                 }
