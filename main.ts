@@ -322,8 +322,9 @@ export default class GitHubOctokitPlugin extends Plugin {
 		}
 
 		// Update main repo ignore patterns to exclude additional repo directories
+		const mainPatterns = this.getMainRepoIgnorePatterns();
 		this.syncService.configure(
-			this.getMainRepoIgnorePatterns(),
+			mainPatterns,
 			this.settings.subfolderPath,
 			this.settings.syncConfiguration
 		);
@@ -701,15 +702,23 @@ export default class GitHubOctokitPlugin extends Plugin {
 			}
 		);
 
+		if (vaultConfigs.length === 0) return;
+
 		const json = JSON.stringify(vaultConfigs, null, '\t');
 
 		try {
 			const existing = this.app.vault.getAbstractFileByPath(VAULT_REPOS_CONFIG_PATH);
 			if (existing instanceof TFile) {
 				await this.app.vault.modify(existing, json);
-			} else if (vaultConfigs.length > 0) {
-				// Only create the file if there are repos to persist
-				await this.app.vault.create(VAULT_REPOS_CONFIG_PATH, json);
+			} else {
+				// File may exist on disk but not yet be indexed by the vault
+				// (e.g. during early startup). Use the adapter as a fallback.
+				const onDisk = await this.app.vault.adapter.exists(VAULT_REPOS_CONFIG_PATH);
+				if (onDisk) {
+					await this.app.vault.adapter.write(VAULT_REPOS_CONFIG_PATH, json);
+				} else {
+					await this.app.vault.create(VAULT_REPOS_CONFIG_PATH, json);
+				}
 			}
 		} catch (error) {
 			console.error('Failed to save vault repo config:', error);

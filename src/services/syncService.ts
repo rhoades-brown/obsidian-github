@@ -203,7 +203,6 @@ export class SyncService {
         } else {
             // Main repo mode: scan all vault files
             const files = this.vault.getFiles();
-
             for (const file of files) {
                 // Skip ignored files
                 if (this.shouldIgnore(file.path)) {
